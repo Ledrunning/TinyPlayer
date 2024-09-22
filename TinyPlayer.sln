@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34902.65
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyPlayer.Desktop", "TinyPlayer.Desktop\TinyPlayer.Desktop.csproj", "{AD8BFEEF-AD80-4167-858B-8954AFB3A6A6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyPlayer.Core", "TinyPlayer.Core\TinyPlayer.Core.csproj", "{CADB38AF-31DD-4F68-B0BC-863A5010EBEA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AD8BFEEF-AD80-4167-858B-8954AFB3A6A6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD8BFEEF-AD80-4167-858B-8954AFB3A6A6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD8BFEEF-AD80-4167-858B-8954AFB3A6A6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD8BFEEF-AD80-4167-858B-8954AFB3A6A6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CADB38AF-31DD-4F68-B0BC-863A5010EBEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CADB38AF-31DD-4F68-B0BC-863A5010EBEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CADB38AF-31DD-4F68-B0BC-863A5010EBEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CADB38AF-31DD-4F68-B0BC-863A5010EBEA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4046EFC6-FBC3-466C-9726-44820676147B}
+	EndGlobalSection
+EndGlobal
