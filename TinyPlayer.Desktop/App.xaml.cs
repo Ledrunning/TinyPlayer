@@ -4,11 +4,14 @@
 // All Rights Reserved.
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
+using TinyPlayer.Desktop.View;
+using TinyPlayer.Desktop.ViewModel;
 using Wpf.Ui;
 
 namespace TinyPlayer
@@ -28,7 +31,11 @@ namespace TinyPlayer
             .ConfigureAppConfiguration(c => { c.SetBasePath(Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)); })
             .ConfigureServices((context, services) =>
             {
-                throw new NotImplementedException("No service or window was registered.");
+
+                // Views and ViewModels
+                services.AddScoped<MainWindow>();
+                services.AddScoped<MainViewModel>();
+
             }).Build();
 
         /// <summary>
