@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using TinyPlayer.Desktop.ViewModel;
 
 namespace TinyPlayer.Desktop.View
 {
@@ -7,9 +8,10 @@ namespace TinyPlayer.Desktop.View
     /// </summary>
     public partial class MainWindow : Window
     {
-        public MainWindow()
+        public MainWindow(MainViewModel viewModel)
         {
             InitializeComponent();
+            DataContext = viewModel;
         }
     }
 }

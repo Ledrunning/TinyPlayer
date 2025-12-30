@@ -55,6 +55,9 @@ namespace TinyPlayer
         private void OnStartup(object sender, StartupEventArgs e)
         {
             _host.Start();
+
+            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            mainWindow.Show();
         }
 
         /// <summary>
