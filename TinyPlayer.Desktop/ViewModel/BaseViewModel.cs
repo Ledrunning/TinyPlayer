@@ -1,15 +1,18 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
-using Wpf.Ui.Controls;
 
 namespace TinyPlayer.Desktop.ViewModel;
 
-public abstract class BaseViewModel : ObservableObject, INavigationAware
+public abstract class BaseViewModel : ObservableObject, IDisposable
 {
     public void OnNavigatedTo()
     {
     }
 
     public void OnNavigatedFrom()
+    {
+    }
+
+    public void Dispose()
     {
     }
 }

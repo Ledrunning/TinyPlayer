@@ -9,10 +9,10 @@ using Microsoft.Extensions.Hosting;
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using TinyPlayer.Desktop.View;
 using TinyPlayer.Desktop.ViewModel;
-using Wpf.Ui;
 
 namespace TinyPlayer
 {
@@ -36,6 +36,10 @@ namespace TinyPlayer
                 services.AddScoped<MainWindow>();
                 services.AddScoped<MainViewModel>();
 
+                // Add services
+                services.AddScoped<D3DImage>(); 
+
+
             }).Build();
 
         /// <summary>
@@ -57,6 +61,7 @@ namespace TinyPlayer
             _host.Start();
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            Current.MainWindow = mainWindow;
             mainWindow.Show();
         }
 
