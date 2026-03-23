@@ -4,12 +4,15 @@
 // All Rights Reserved.
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
-using Wpf.Ui;
+using TinyPlayer.Desktop.View;
+using TinyPlayer.Desktop.ViewModel;
 
 namespace TinyPlayer
 {
@@ -25,10 +28,18 @@ namespace TinyPlayer
         // https://docs.microsoft.com/dotnet/core/extensions/logging
         private static readonly IHost _host = Host
             .CreateDefaultBuilder()
-            .ConfigureAppConfiguration(c => { c.SetBasePath(Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)); })
+            .ConfigureAppConfiguration(c => { c.SetBasePath(basePath: Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)); })
             .ConfigureServices((context, services) =>
             {
-                throw new NotImplementedException("No service or window was registered.");
+
+                // Views and ViewModels
+                services.AddScoped<MainWindow>();
+                services.AddScoped<MainViewModel>();
+
+                // Add services
+                services.AddScoped<D3DImage>(); 
+
+
             }).Build();
 
         /// <summary>
@@ -36,7 +47,7 @@ namespace TinyPlayer
         /// </summary>
         /// <typeparam name="T">Type of the service to get.</typeparam>
         /// <returns>Instance of the service or <see langword="null"/>.</returns>
-        public static T GetService<T>()
+        public static T? GetService<T>()
             where T : class
         {
             return _host.Services.GetService(typeof(T)) as T;
@@ -48,6 +59,10 @@ namespace TinyPlayer
         private void OnStartup(object sender, StartupEventArgs e)
         {
             _host.Start();
+
+            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            Current.MainWindow = mainWindow;
+            mainWindow.Show();
         }
 
         /// <summary>
