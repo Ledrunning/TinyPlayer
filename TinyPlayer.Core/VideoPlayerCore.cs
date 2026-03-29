@@ -28,6 +28,7 @@ public sealed class VideoPlayerCore : IDisposable
     private uint _refreshUiHandle;
     private long _duration = -1;
     private bool _disposed;
+    private Element _volumeElement;
 
     public event Action<long, long>? PositionChanged;
     public event EventHandler<StreamsAnalysedEventArgs>? StreamsAnalysed;
@@ -65,6 +66,11 @@ public sealed class VideoPlayerCore : IDisposable
             _playbin["uri"] = uri;
             ApplyFlags(AvFlagsType.EnableAllFlags);
 
+            var volume = ElementFactory.Make("volume", "my-volume");
+            _playbin.SetProperty("audio-filter", new GLib.Value(volume));
+
+            System.Diagnostics.Trace.WriteLine($"[AudioSink BEFORE] - {_playbin["audio-sink"]}");
+
             // Connect the bus before starting
             var bus = _playbin.Bus;
             bus.AddSignalWatch();
@@ -85,6 +91,8 @@ public sealed class VideoPlayerCore : IDisposable
             _playbin.SetState(State.Playing);
 
             _refreshUiHandle = GLib.Timeout.Add(SeekDelayMs, OnRefreshTimer);
+
+            System.Diagnostics.Trace.WriteLine($"[AudioSink AFTER] {_playbin["audio-sink"]?.ToString() ?? "default"}");
         }
         else
         {
@@ -137,6 +145,31 @@ public sealed class VideoPlayerCore : IDisposable
         var flags = (uint)_playbin["flags"];
         _playbin["flags"] = enabled ? flags | (uint)AvFlagsType.Audio
                                     : flags & ~(uint)AvFlagsType.Audio;
+    }
+
+    public void SetVolume(double value)
+    {
+        if (_playbin != null)
+        {
+            if (_volumeElement == null)
+            {
+                _volumeElement = ((Gst.Bin)_playbin).GetByName("my-volume");
+            }
+
+            if (_volumeElement != null)
+            {
+                _volumeElement.SetProperty("volume", new GLib.Value(value));
+                System.Diagnostics.Trace.WriteLine($"[Volume] via element: {value}");
+            }
+            else
+            {
+                System.Diagnostics.Trace.WriteLine("[Volume] element NOT FOUND");
+            }
+        }
+        else
+        {
+            // Log me!
+        }
     }
 
     public void ApplyFlags(AvFlagsType flags)
