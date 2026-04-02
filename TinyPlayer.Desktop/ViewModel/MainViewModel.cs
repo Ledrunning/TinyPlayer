@@ -6,6 +6,7 @@ using TinyPlayer.Core;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using Task = System.Threading.Tasks.Task;
 using Uri = System.Uri;
 
 namespace TinyPlayer.Desktop.ViewModel;
@@ -14,24 +15,13 @@ public partial class MainViewModel : BaseViewModel
 {
     private VideoPlayerCore? _core;
     private bool _coreUpdating;
-    private IntPtr _hwnd;
+    private bool _isUserSeeking;
+    private CancellationTokenSource? _seekCts;
 
     [ObservableProperty] private long _position;
     [ObservableProperty] private long _duration;
     [ObservableProperty] private string _timeText = "00:00 / 00:00";
     [ObservableProperty] private string _streamInfo = string.Empty;
-
-    partial void OnPositionChanged(long value)
-    {
-        if (_coreUpdating) return;
-        _core?.SeekTo((int)value);
-        TimeText = FormatTime(value, _duration);
-    }
-
-    // Public API
-
-    /// <summary>Called from the code-behind once after the Loaded event.</summary>
-    public void SetVideoHandle(IntPtr hwnd) => _hwnd = hwnd;
 
     [ObservableProperty]
     private bool _isPlaying;
@@ -71,6 +61,7 @@ public partial class MainViewModel : BaseViewModel
 
     [ObservableProperty]
     private double _volume = 100;
+    private nint _hwnd;
 
     [RelayCommand(CanExecute = nameof(HasCore))]
     private void ToggleMute()
@@ -86,7 +77,6 @@ public partial class MainViewModel : BaseViewModel
         DisposeCore();
 
         _core = new VideoPlayerCore(uri, _hwnd);
-
         _core.PositionChanged += (cur, dur) =>
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
@@ -124,9 +114,56 @@ public partial class MainViewModel : BaseViewModel
     partial void OnVolumeChanged(double value)
         => _core?.SetVolume(value / 100.0);
 
+    partial void OnPositionChanged(long value)
+    {
+        if (_coreUpdating) return;
+
+        if (_isUserSeeking)
+        {
+            DebouncedSeek(value);
+        }
+    }
+
+    private async void DebouncedSeek(long value)
+    {
+        _seekCts?.Cancel();
+
+        var cts = new CancellationTokenSource();
+        _seekCts = cts;
+
+        try
+        {
+            await Task.Delay(200, cts.Token);
+
+            if (!cts.IsCancellationRequested)
+            {
+                _core?.SeekTo((int)value);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // ignore
+        }
+    }
+
+    public void BeginSeek()
+    {
+        _isUserSeeking = true;
+    }
+
+    public void EndSeek()
+    {
+        _isUserSeeking = false;
+
+        _seekCts?.Cancel(); 
+        _core?.SeekTo((int)Position);
+    }
+
     // Helpers
     private void SetPosition(long s)
     {
+        if (_isUserSeeking) return; // 💥 ключевой момент
+
         _coreUpdating = true;
         Position = s;
         _coreUpdating = false;
@@ -141,6 +178,11 @@ public partial class MainViewModel : BaseViewModel
 
     private static string FormatTime(long cur, long dur)
         => $"{TimeSpan.FromSeconds(cur):mm\\:ss} / {TimeSpan.FromSeconds(dur):mm\\:ss}";
+
+    public void SetVideoHandle(IntPtr hwnd)
+    {
+        _hwnd = hwnd;
+    }
 
     private void DisposeCore()
     {

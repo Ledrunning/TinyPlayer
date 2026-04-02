@@ -17,9 +17,6 @@
     WindowCornerPreference="Round"
     WindowStartupLocation="CenterScreen"
     mc:Ignorable="d">
-    <Window.DataContext>
-        <viewmodel:MainViewModel />
-    </Window.DataContext>
     <Window.Resources>
         <converters:BoolToPlayPauseConverter x:Key="BoolToPlayPauseConverter" />
     </Window.Resources>
@@ -44,13 +41,9 @@
             </ui:TitleBar.Header>
         </ui:TitleBar>
 
-        <Border
-            Grid.Row="1"
-            Margin="12"
-            ClipToBounds="True"
-            CornerRadius="8">
-            <controls:VideoPanel x:Name="VideoHost" />
-        </Border>
+        <Grid Grid.Row="1">
+            <controls:VideoHost x:Name="VideoSurface" />
+        </Grid>
 
         <Border
             Grid.Row="2"
@@ -122,6 +115,8 @@
                     IsMoveToPointEnabled="True"
                     Maximum="{Binding Duration}"
                     Minimum="0"
+                    PreviewMouseDown="OnSeekStarted"
+                    PreviewMouseUp="OnSeekCompleted"
                     Value="{Binding Position, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
                 <!--  Time  -->
