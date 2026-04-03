@@ -1,9 +1,12 @@
 ﻿using GLib;
 using Gst;
+using Gst.Video;
+using System.Diagnostics;
 using System.Text;
 using TinyPlayer.Core.Enums;
 using TinyPlayer.Core.Models;
 using Constants = Gst.Constants;
+using TagList = Gst.TagList;
 using Thread = System.Threading.Thread;
 
 namespace TinyPlayer.Core;
@@ -12,6 +15,7 @@ public class StreamsAnalysedEventArgs : EventArgs
 {
     public MetadataModel Metadata { get; }
     public string StreamInfo { get; }
+
     public StreamsAnalysedEventArgs(MetadataModel metadata, string info)
     {
         Metadata = metadata;
@@ -29,84 +33,99 @@ public sealed class VideoPlayerCore : IDisposable
     private long _duration = -1;
     private bool _disposed;
     private Element _volumeElement;
+    private nint _hwnd;
 
     public event Action<long, long>? PositionChanged;
+
     public event EventHandler<StreamsAnalysedEventArgs>? StreamsAnalysed;
+
     public event Action<string>? ErrorOccurred;
+
     public event Action? EndOfStream;
+
     public event Action<State>? StateChanged;
 
-    public VideoPlayerCore(string uri, IntPtr hwnd)
+    public VideoPlayerCore(string uri, nint hwnd)
     {
         if (string.IsNullOrWhiteSpace(uri))
         {
             throw new ArgumentNullException(nameof(uri));
         }
-        if (hwnd == IntPtr.Zero)
-        {
-            throw new ArgumentException("HWND must be valid.", nameof(hwnd));
-        }
+
+        _hwnd = hwnd;
 
         Gst.Application.Init();
         GtkSharp.GstreamerSharp.ObjectManager.Initialize();
 
-        InitPipeline(uri, hwnd);
+        InitPipeline(uri);
     }
 
-    private void InitPipeline(string uri, IntPtr hwnd)
+    private void InitPipeline(string uri)
     {
+        // MainLoop must have for bus events
         _mainLoop = new MainLoop();
         _mainGlibThread = new Thread(_mainLoop.Run) { IsBackground = true, Name = "GLibMain" };
         _mainGlibThread.Start();
 
         _playbin = ElementFactory.Make("playbin");
+        _playbin["uri"] = uri;
 
-        if (_playbin != null)
+        var audioSink = ElementFactory.Make("directsoundsink", "audio_sink");
+        if (audioSink != null)
         {
-            _playbin["uri"] = uri;
-            ApplyFlags(AvFlagsType.EnableAllFlags);
-
-            var volume = ElementFactory.Make("volume", "my-volume");
-            _playbin.SetProperty("audio-filter", new GLib.Value(volume));
-
-            System.Diagnostics.Trace.WriteLine($"[AudioSink BEFORE] - {_playbin["audio-sink"]}");
-
-            // Connect the bus before starting
-            var bus = _playbin.Bus;
-            bus.AddSignalWatch();
-            bus.Connect("message::error", ErrorCb);
-            bus.Connect("message::eos", EosCb);
-            bus.Connect("message::state-changed", StateChangedCb);
-            bus.Connect("message::application", ApplicationCb);
-
-            _playbin.Connect("video-tags-changed", TagsCb);
-            _playbin.Connect("audio-tags-changed", TagsCb);
-            _playbin.Connect("text-tags-changed", TagsCb);
-
-            // Register the sync handler it will catch the prepare-window-handle
-            // event synchronously and pass the HWND before the sink creates its window.
-            VideoSinkFactory.TryCreateAndAttach(_playbin, hwnd);
-
-            // Directly to Playing — the HWND will be passed via a SyncMessage on the fly
-            _playbin.SetState(State.Playing);
-
-            _refreshUiHandle = GLib.Timeout.Add(SeekDelayMs, OnRefreshTimer);
-
-            System.Diagnostics.Trace.WriteLine($"[AudioSink AFTER] {_playbin["audio-sink"]?.ToString() ?? "default"}");
+            _playbin["audio-sink"] = audioSink;
+            Trace.WriteLine("[Audio] directsoundsink set");
         }
-        else
+
+        var sink = ElementFactory.Make("d3dvideosink", "video_sink");
+        _playbin["video-sink"] = sink;
+
+        var bus = _playbin.Bus;
+        bus.AddSignalWatch();
+        bus.EnableSyncMessageEmission();
+
+        bus.Connect("message::error", ErrorCb);
+        bus.Connect("message::eos", EosCb);
+        bus.Connect("message::state-changed", StateChangedCb);
+        bus.Connect("message::application", ApplicationCb);
+
+        bus.SyncMessage += (o, args) =>
         {
-            throw new InvalidOperationException("GStreamer: failed to create 'playbin'.");
-        }
+            var msg = (Gst.Message)args.Args[0];
+            if (msg.Type != MessageType.Element) return;
+            if (msg.Structure?.Name != "prepare-window-handle") return;
+
+            var overlay = new VideoOverlayAdapter(msg.Src.Handle);
+            overlay.WindowHandle = _hwnd;
+            overlay.HandleEvents(true);
+            Trace.WriteLine("[VIDEO] HWND attached");
+        };
+
+        _playbin.Connect("video-tags-changed", TagsCb);
+        _playbin.Connect("audio-tags-changed", TagsCb);
+        _playbin.Connect("text-tags-changed", TagsCb);
+
+        _playbin.SetProperty("flags", new GLib.Value((uint)AvFlagsType.EnableAllFlags));
+
+        // Waiting for the actual Paused evenе only then is the duration known
+        _playbin.SetState(State.Paused);
+        _playbin.GetState(out _, out _, Constants.SECOND * 5);
+        _playbin.SetState(State.Playing);
+
+        _refreshUiHandle = GLib.Timeout.Add(SeekDelayMs, OnRefreshTimer);
     }
 
     public void Play() => _playbin?.SetState(State.Playing);
+
     public void Pause() => _playbin?.SetState(State.Paused);
+
     public void Stop() => _playbin?.SetState(State.Ready);
 
     public void SeekTo(int seconds)
-        => _playbin?.SeekSimple(Format.Time, SeekFlags.Flush | SeekFlags.KeyUnit,
-                                (long)seconds * Constants.SECOND);
+        => _playbin?.SeekSimple(
+            Format.Time,
+            SeekFlags.Flush | SeekFlags.Accurate,
+            (long)seconds * Constants.SECOND);
 
     public void SetAudioTrack(int index)
     {
@@ -115,6 +134,7 @@ public sealed class VideoPlayerCore : IDisposable
             _playbin["current-audio"] = index;
         }
     }
+
     public void SetSubtitleTrack(int index)
     {
         if (_playbin != null)
@@ -149,31 +169,45 @@ public sealed class VideoPlayerCore : IDisposable
 
     public void SetVolume(double value)
     {
+        if (_playbin == null)
+        {
+            return;
+        }
+
         if (_playbin != null)
         {
-            if (_volumeElement == null)
-            {
-                _volumeElement = ((Gst.Bin)_playbin).GetByName("my-volume");
-            }
-
-            if (_volumeElement != null)
-            {
-                _volumeElement.SetProperty("volume", new GLib.Value(value));
-                System.Diagnostics.Trace.WriteLine($"[Volume] via element: {value}");
-            }
-            else
-            {
-                System.Diagnostics.Trace.WriteLine("[Volume] element NOT FOUND");
-            }
-        }
-        else
-        {
-            // Log me!
+            _playbin["volume"] = value;
+            Trace.WriteLine($"[Volume] playbin: {value}");
         }
     }
 
     public void ApplyFlags(AvFlagsType flags)
         => _playbin?.SetProperty("flags", new GLib.Value((uint)flags));
+
+    private void OnElementMessage(object o, GLib.SignalArgs args)
+    {
+        var msg = (Gst.Message)args.Args[0];
+
+        var s = msg.Structure;
+        if (s == null)
+            return;
+
+        if (s.Name != "d3d11-present")
+            return;
+
+        try
+        {
+            var handle = (IntPtr)s.GetValue("shared-handle");
+            int width = (int)s.GetValue("width");
+            int height = (int)s.GetValue("height");
+
+            Trace.WriteLine($"[D3D11] frame {width}x{height}, handle={handle}");
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[D3D11 ERROR] {ex}");
+        }
+    }
 
     private bool OnRefreshTimer()
     {
@@ -341,5 +375,3 @@ public sealed class VideoPlayerCore : IDisposable
         _mainGlibThread?.Join(TimeSpan.FromSeconds(3));
     }
 }
-
-

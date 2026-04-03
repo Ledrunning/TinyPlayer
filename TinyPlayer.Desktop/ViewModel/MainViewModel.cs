@@ -5,18 +5,18 @@ using System.Windows;
 using TinyPlayer.Core;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
-using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using Task = System.Threading.Tasks.Task;
-using Uri = System.Uri;
 
 namespace TinyPlayer.Desktop.ViewModel;
 
 public partial class MainViewModel : BaseViewModel
 {
-    private VideoPlayerCore? _core;
     private bool _coreUpdating;
     private bool _isUserSeeking;
     private CancellationTokenSource? _seekCts;
+    private const double MaxVolumeDelta = 100.0;
+    private const int SeekDebounce = 100;
+    private const int MaxVolumePercentage = 100;
 
     [ObservableProperty] private long _position;
     [ObservableProperty] private long _duration;
@@ -25,59 +25,51 @@ public partial class MainViewModel : BaseViewModel
 
     [ObservableProperty]
     private bool _isPlaying;
+    [ObservableProperty]
+    private bool _isMuted;
 
     [RelayCommand(CanExecute = nameof(HasCore))]
     private void TogglePlayPause()
     {
-        if (_isPlaying)
+        if (IsPlaying)
         {
-            _core?.Pause();
+            Core?.Pause();
         }
         else
         {
-            _core?.Play();
+            Core?.Play();
         }
     }
-
-    [RelayCommand(CanExecute = nameof(HasCore))]
-    private void Stop() { _core?.Stop(); SetPosition(0); }
-
-    [RelayCommand]
-    private void OpenFile()
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title = "Open the video file",
-            Filter = "Video|*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.flv;*.webm|All files|*.*"
-        };
-
-        if (dlg.ShowDialog() != true)
-        {
-            return;
-        }
-
-        LoadUri(new Uri(dlg.FileName).AbsoluteUri);
-    }
-
-    [ObservableProperty]
-    private double _volume = 100;
-    private nint _hwnd;
 
     [RelayCommand(CanExecute = nameof(HasCore))]
     private void ToggleMute()
     {
-        Volume = Volume > 0 ? 0 : 100;
+        IsMuted = !IsMuted;
+        Core?.SetVolume(IsMuted ? 0 : Volume / MaxVolumeDelta);
     }
 
-    private bool HasCore() => _core != null;
+    [RelayCommand(CanExecute = nameof(HasCore))]
+    private void Stop() { Core?.Stop(); SetPosition(0); }
+
+    [RelayCommand]
+    private void OpenFile()
+    {
+        base.OpenFile(LoadUri);
+    }
+
+    [ObservableProperty]
+    private double _volume = MaxVolumePercentage;
+    private nint _hwnd;
+
+    private bool HasCore() => Core != null;
 
     // Load
     private void LoadUri(string uri)
     {
         DisposeCore();
 
-        _core = new VideoPlayerCore(uri, _hwnd);
-        _core.PositionChanged += (cur, dur) =>
+        Core = new VideoPlayerCore(uri, _hwnd);
+        Core.PositionChanged += (cur, dur) =>
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 SetDuration(dur);
@@ -85,34 +77,42 @@ public partial class MainViewModel : BaseViewModel
                 TimeText = FormatTime(cur, dur);
             });
 
-        _core.StreamsAnalysed += (_, e) =>
+        Core.StreamsAnalysed += (_, e) =>
             Application.Current?.Dispatcher.BeginInvoke(() =>
                 StreamInfo = e.StreamInfo);
 
         //TODO : add custom message box!
-        _core.ErrorOccurred += msg =>
+        Core.ErrorOccurred += msg =>
             Application.Current?.Dispatcher.Invoke(() =>
                 MessageBox.Show(msg, "Playback error",
                     MessageBoxButton.OK, MessageBoxImage.Error));
 
-        _core.EndOfStream += () =>
+        Core.EndOfStream += () =>
             Application.Current?.Dispatcher.Invoke(() =>
             {
                 SetPosition(0);
                 TimeText = FormatTime(0, Duration);
             });
 
-        _core.StateChanged += state =>
+        Core.StateChanged += state =>
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 IsPlaying = state == State.Playing;
                 TogglePlayPauseCommand.NotifyCanExecuteChanged();
                 StopCommand.NotifyCanExecuteChanged();
             });
+
+        ToggleMuteCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnVolumeChanged(double value)
-        => _core?.SetVolume(value / 100.0);
+    {
+        if (IsMuted)
+        {
+            return;
+        }
+        Core?.SetVolume(value / MaxVolumeDelta);
+    }
 
     partial void OnPositionChanged(long value)
     {
@@ -133,16 +133,16 @@ public partial class MainViewModel : BaseViewModel
 
         try
         {
-            await Task.Delay(200, cts.Token);
+            await Task.Delay(SeekDebounce, cts.Token);
 
             if (!cts.IsCancellationRequested)
             {
-                _core?.SeekTo((int)value);
+                Core?.SeekTo((int)value);
             }
         }
         catch (TaskCanceledException)
         {
-            // ignore
+            // TODO: add log 
         }
     }
 
@@ -156,13 +156,16 @@ public partial class MainViewModel : BaseViewModel
         _isUserSeeking = false;
 
         _seekCts?.Cancel(); 
-        _core?.SeekTo((int)Position);
+        Core?.SeekTo((int)Position);
     }
 
     // Helpers
     private void SetPosition(long s)
     {
-        if (_isUserSeeking) return; // 💥 ключевой момент
+        if (_isUserSeeking)
+        {
+            return;
+        }
 
         _coreUpdating = true;
         Position = s;
@@ -186,8 +189,7 @@ public partial class MainViewModel : BaseViewModel
 
     private void DisposeCore()
     {
-        _core?.Dispose();
-        _core = null;
+        Dispose();
         SetPosition(0);
         SetDuration(0);
     }

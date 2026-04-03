@@ -3,11 +3,14 @@ using System.Windows.Interop;
 
 namespace TinyPlayer.Desktop.Controls;
 
+/// <summary>
+/// Native P/Invoke Windows panel for WPF
+/// </summary>
 public class VideoHost : HwndHost
 {
     private IntPtr _hwndHost;
 
-    public IntPtr Handle => _hwndHost;
+    public new IntPtr Handle => _hwndHost;
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
@@ -30,9 +33,9 @@ public class VideoHost : HwndHost
         DestroyWindow(hwnd.Handle);
     }
 
-    // --- Win32 ---
-
+    // Win32
     private const int WS_CHILD = 0x40000000;
+
     private const int WS_VISIBLE = 0x10000000;
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -51,4 +54,3 @@ public class VideoHost : HwndHost
     [DllImport("user32.dll")]
     private static extern bool DestroyWindow(IntPtr hwnd);
 }
-
