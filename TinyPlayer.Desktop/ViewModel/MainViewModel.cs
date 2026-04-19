@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Gst;
 using System.Windows;
 using TinyPlayer.Core;
+using TinyPlayer.Core.Models;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 using Task = System.Threading.Tasks.Task;
@@ -11,6 +12,9 @@ namespace TinyPlayer.Desktop.ViewModel;
 
 public partial class MainViewModel : BaseViewModel
 {
+    private bool _streamsInitialized;
+    private bool _isInternalUpdate;
+    private List<StreamItem> _allSubtitleTracks = [];
     private bool _coreUpdating;
     private bool _isUserSeeking;
     private CancellationTokenSource? _seekCts;
@@ -18,15 +22,32 @@ public partial class MainViewModel : BaseViewModel
     private const int SeekDebounce = 100;
     private const int MaxVolumePercentage = 100;
 
-    [ObservableProperty] private long _position;
-    [ObservableProperty] private long _duration;
-    [ObservableProperty] private string _timeText = "00:00 / 00:00";
-    [ObservableProperty] private string _streamInfo = string.Empty;
+    [ObservableProperty]
+    private long _position;
+
+    [ObservableProperty]
+    private long _duration;
+
+    [ObservableProperty]
+    private string _timeText = "00:00 / 00:00";
+
+    [ObservableProperty]
+    private string _streamInfo = string.Empty;
 
     [ObservableProperty]
     private bool _isPlaying;
+
     [ObservableProperty]
     private bool _isMuted;
+
+    [ObservableProperty]
+    private bool _subtitlesEnabled;
+
+    [ObservableProperty]
+    private StreamItem? _selectedAudioTrack;
+
+    [ObservableProperty]
+    private StreamItem? _selectedSubtitleTrack;
 
     [RelayCommand(CanExecute = nameof(HasCore))]
     private void TogglePlayPause()
@@ -45,11 +66,15 @@ public partial class MainViewModel : BaseViewModel
     private void ToggleMute()
     {
         IsMuted = !IsMuted;
-        Core?.SetVolume(IsMuted ? 0 : Volume / MaxVolumeDelta);
+
+        Core?.SetVolume(IsMuted ? 0 : Math.Max(Volume / MaxVolumeDelta, 0.01));
     }
 
     [RelayCommand(CanExecute = nameof(HasCore))]
-    private void Stop() { Core?.Stop(); SetPosition(0); }
+    private void Stop()
+    {
+        Core?.Stop(); SetPosition(0);
+    }
 
     [RelayCommand]
     private void OpenFile()
@@ -59,6 +84,7 @@ public partial class MainViewModel : BaseViewModel
 
     [ObservableProperty]
     private double _volume = MaxVolumePercentage;
+
     private nint _hwnd;
 
     private bool HasCore() => Core != null;
@@ -77,24 +103,23 @@ public partial class MainViewModel : BaseViewModel
                 TimeText = FormatTime(cur, dur);
             });
 
-        Core.StreamsAnalysed += (_, e) =>
-            Application.Current?.Dispatcher.BeginInvoke(() =>
-                StreamInfo = e.StreamInfo);
+        Core?.StreamsAnalysed -= OnStreamsAnalysed;
+        Core?.StreamsAnalysed += OnStreamsAnalysed;
 
         //TODO : add custom message box!
-        Core.ErrorOccurred += msg =>
+        Core?.ErrorOccurred += msg =>
             Application.Current?.Dispatcher.Invoke(() =>
                 MessageBox.Show(msg, "Playback error",
                     MessageBoxButton.OK, MessageBoxImage.Error));
 
-        Core.EndOfStream += () =>
+        Core?.EndOfStream += () =>
             Application.Current?.Dispatcher.Invoke(() =>
             {
                 SetPosition(0);
                 TimeText = FormatTime(0, Duration);
             });
 
-        Core.StateChanged += state =>
+        Core?.StateChanged += state =>
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 IsPlaying = state == State.Playing;
@@ -103,6 +128,63 @@ public partial class MainViewModel : BaseViewModel
             });
 
         ToggleMuteCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnStreamsAnalysed(object? sender, StreamsAnalysedEventArgs e)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            AudioTracks.Clear();
+            SubtitleTracks.Clear();
+            _allSubtitleTracks.Clear();
+
+            for (var i = 0; i < e.Metadata.NumOfAudioStreams; i++)
+            {
+                AudioTracks.Add(new StreamItem
+                {
+                    Index = i,
+                    Title = $"Audio {i}"
+                });
+            }
+
+            for (var i = 0; i < e.Metadata.NumOfSubtitles; i++)
+            {
+                var item = new StreamItem
+                {
+                    Index = i,
+                    Title = $"Sub {i}"
+                };
+
+                _allSubtitleTracks.Add(item);
+            }
+
+            ApplySubtitleFilter();
+            _streamsInitialized = true;
+        });
+    }
+
+    private void ApplySubtitleFilter()
+    {
+        _isInternalUpdate = true;
+        try
+        {
+            SubtitleTracks.Clear();
+
+            if (!SubtitlesEnabled)
+            {
+                SelectedSubtitleTrack = null;
+                return;
+            }
+
+            foreach (var item in _allSubtitleTracks)
+                SubtitleTracks.Add(item);
+
+            SelectedSubtitleTrack = SubtitleTracks.FirstOrDefault();
+        }
+        finally
+        {
+            _isInternalUpdate = false;
+        }
     }
 
     partial void OnVolumeChanged(double value)
@@ -142,7 +224,7 @@ public partial class MainViewModel : BaseViewModel
         }
         catch (TaskCanceledException)
         {
-            // TODO: add log 
+            // TODO: add log
         }
     }
 
@@ -155,7 +237,7 @@ public partial class MainViewModel : BaseViewModel
     {
         _isUserSeeking = false;
 
-        _seekCts?.Cancel(); 
+        _seekCts?.Cancel();
         Core?.SeekTo((int)Position);
     }
 
@@ -180,18 +262,62 @@ public partial class MainViewModel : BaseViewModel
     }
 
     private static string FormatTime(long cur, long dur)
-        => $"{TimeSpan.FromSeconds(cur):mm\\:ss} / {TimeSpan.FromSeconds(dur):mm\\:ss}";
+        => $@"{TimeSpan.FromSeconds(cur):mm\:ss} / {TimeSpan.FromSeconds(dur):mm\:ss}";
 
     public void SetVideoHandle(IntPtr hwnd)
     {
         _hwnd = hwnd;
     }
 
+    partial void OnSelectedAudioTrackChanged(StreamItem? value)
+    {
+        if (!_streamsInitialized)
+        {
+            return;
+        }
+
+        if (value != null)
+        {
+            Core?.SetAudioTrack(value.Index);
+        }
+    }
+
+    partial void OnSelectedSubtitleTrackChanged(StreamItem? value)
+    {
+        if (_isInternalUpdate)
+        {
+            return;
+        }
+
+        if (!_streamsInitialized)
+        {
+            return;
+        }
+
+        if (!SubtitlesEnabled)
+        {
+            return;
+        }
+
+        if (value != null)
+        {
+            Core?.SetSubtitleTrack(value.Index);
+        }
+    }
+
+    partial void OnSubtitlesEnabledChanged(bool value)
+    {
+        Core?.SetSubtitlesEnabled(value);
+
+        ApplySubtitleFilter();
+    }
+
     private void DisposeCore()
     {
+        _streamsInitialized = false;
+        Core?.StreamsAnalysed -= OnStreamsAnalysed;
         Dispose();
         SetPosition(0);
         SetDuration(0);
     }
-
 }

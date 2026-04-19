@@ -11,16 +11,10 @@ using Thread = System.Threading.Thread;
 
 namespace TinyPlayer.Core;
 
-public class StreamsAnalysedEventArgs : EventArgs
+public class StreamsAnalysedEventArgs(MetadataModel metadata, string info) : EventArgs
 {
-    public MetadataModel Metadata { get; }
-    public string StreamInfo { get; }
-
-    public StreamsAnalysedEventArgs(MetadataModel metadata, string info)
-    {
-        Metadata = metadata;
-        StreamInfo = info;
-    }
+    public MetadataModel Metadata { get; } = metadata;
+    public string StreamInfo { get; } = info;
 }
 
 public sealed class VideoPlayerCore : IDisposable
@@ -32,8 +26,7 @@ public sealed class VideoPlayerCore : IDisposable
     private uint _refreshUiHandle;
     private long _duration = -1;
     private bool _disposed;
-    private Element _volumeElement;
-    private nint _hwnd;
+    private readonly nint _hwnd;
 
     public event Action<long, long>? PositionChanged;
 
@@ -151,8 +144,20 @@ public sealed class VideoPlayerCore : IDisposable
         }
 
         var flags = (uint)_playbin["flags"];
-        _playbin["flags"] = enabled ? flags | (uint)AvFlagsType.SubText
-                                    : flags & ~(uint)AvFlagsType.SubText;
+
+        if (enabled)
+        {
+            _playbin["flags"] = flags | (uint)AvFlagsType.SubText;
+        }
+        else
+        {
+            _playbin["flags"] = flags & ~(uint)AvFlagsType.SubText;
+        }
+
+        if (!enabled)
+        {
+            _playbin["current-text"] = -1;
+        }
     }
 
     public void SetAudioEnabled(bool enabled)
@@ -174,11 +179,8 @@ public sealed class VideoPlayerCore : IDisposable
             return;
         }
 
-        if (_playbin != null)
-        {
-            _playbin["volume"] = value;
-            Trace.WriteLine($"[Volume] playbin: {value}");
-        }
+        _playbin["volume"] = value;
+        Trace.WriteLine($"[Volume] playbin: {value}");
     }
 
     public void ApplyFlags(AvFlagsType flags)
@@ -271,10 +273,10 @@ public sealed class VideoPlayerCore : IDisposable
         }
     }
 
-    private void TagsCb(object sender, SignalArgs args)
+    private static void TagsCb(object sender, SignalArgs args)
     {
         var el = sender as Element;
-        el?.PostMessage(Gst.Message.NewApplication(el, new Structure("tags-changed")));
+        el?.PostMessage(Message.NewApplication(el, new Structure("tags-changed")));
     }
 
     private void AnalyseStreams()
@@ -294,7 +296,7 @@ public sealed class VideoPlayerCore : IDisposable
         var sb = new StringBuilder();
         for (int? i = 0; i < metadata.NumOfVideoStreams; i++)
         {
-            var tags = (Gst.TagList)_playbin.Emit("get-video-tags", i);
+            var tags = (TagList)_playbin.Emit("get-video-tags", i);
             if (tags == null)
             {
                 continue;
