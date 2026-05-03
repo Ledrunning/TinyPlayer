@@ -3,7 +3,6 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="clr-namespace:TinyPlayer.Desktop.Controls"
-    xmlns:converters="clr-namespace:TinyPlayer.Desktop.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -11,18 +10,13 @@
     Title="TinyPlayer"
     Width="900"
     Height="550"
+    d:DataContext="{d:DesignInstance Type=viewmodel:MainViewModel}"
     Closed="Window_Closed"
     ExtendsContentIntoTitleBar="True"
     WindowBackdropType="Mica"
     WindowCornerPreference="Round"
     WindowStartupLocation="CenterScreen"
     mc:Ignorable="d">
-    <Window.DataContext>
-        <viewmodel:MainViewModel />
-    </Window.DataContext>
-    <Window.Resources>
-        <converters:BoolToPlayPauseConverter x:Key="BoolToPlayPauseConverter" />
-    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -35,22 +29,35 @@
             Grid.Row="0"
             Margin="0,0,0,0">
             <ui:TitleBar.Header>
-                <ui:Button
-                    Margin="0,0,0,0"
-                    Appearance="Transparent"
-                    Command="{Binding OpenFileCommand}"
-                    Icon="{ui:SymbolIcon FolderOpen24}"
-                    ToolTip="Open file" />
+                <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                    <ui:Button
+                        Margin="0,0,8,0"
+                        Appearance="Transparent"
+                        Command="{Binding OpenFileCommand}"
+                        Icon="{ui:SymbolIcon FolderOpen24}"
+                        ToolTip="Open file" />
+
+                    <ComboBox
+                        Width="100"
+                        Margin="0,0,8,0"
+                        DisplayMemberPath="Title"
+                        ItemsSource="{Binding AudioTracks}"
+                        SelectedItem="{Binding SelectedAudioTrack}" />
+                    <ComboBox
+                        Width="100"
+                        Margin="0,0,8,0"
+                        DisplayMemberPath="Title"
+                        ItemsSource="{Binding SubtitleTracks}"
+                        SelectedItem="{Binding SelectedSubtitleTrack}" />
+                    <ui:ToggleSwitch Margin="0,0,8,0" IsChecked="{Binding SubtitlesEnabled}" />
+                    <Label Margin="0,10,8,0" Content="CC" />
+                </StackPanel>
             </ui:TitleBar.Header>
         </ui:TitleBar>
 
-        <Border
-            Grid.Row="1"
-            Margin="12"
-            ClipToBounds="True"
-            CornerRadius="8">
-            <controls:VideoPanel x:Name="VideoHost" />
-        </Border>
+        <Grid Grid.Row="1" Background="Black">
+            <controls:VideoHost x:Name="VideoSurface" />
+        </Grid>
 
         <Border
             Grid.Row="2"
@@ -78,11 +85,20 @@
                     Grid.Column="0"
                     Width="60"
                     Height="35"
-                    Margin="0,0,6,0"
+                    Margin="0,0,4,0"
                     Appearance="Primary"
-                    Command="{Binding TogglePlayPauseCommand}"
-                    Content="{Binding IsPlaying, Converter={StaticResource BoolToPlayPauseConverter}}"
-                    FontSize="24" />
+                    Command="{Binding TogglePlayPauseCommand}">
+                    <ui:Button.Style>
+                        <Style BasedOn="{StaticResource {x:Type ui:Button}}" TargetType="ui:Button">
+                            <Setter Property="Icon" Value="{ui:SymbolIcon Symbol=Play24}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <Setter Property="Icon" Value="{ui:SymbolIcon Symbol=Pause24}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ui:Button.Style>
+                </ui:Button>
 
                 <!--  Stop  -->
                 <ui:Button
@@ -101,9 +117,19 @@
                     Width="38"
                     Height="35"
                     Margin="0,0,4,0"
-                    Appearance="Transparent"
-                    Command="{Binding ToggleMuteCommand}"
-                    Icon="{ui:SymbolIcon Speaker224}" />
+                    Appearance="Primary"
+                    Command="{Binding ToggleMuteCommand}">
+                    <ui:Button.Style>
+                        <Style BasedOn="{StaticResource {x:Type ui:Button}}" TargetType="ui:Button">
+                            <Setter Property="Icon" Value="{ui:SymbolIcon Speaker224}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                                    <Setter Property="Icon" Value="{ui:SymbolIcon SpeakerOff24}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ui:Button.Style>
+                </ui:Button>
 
                 <!--  Volume  -->
                 <Slider
@@ -114,7 +140,7 @@
                     Minimum="0"
                     Value="{Binding Volume, Mode=TwoWay}" />
 
-                <!--  Progress — занимает всё свободное место  -->
+                <!--  Progress  -->
                 <Slider
                     Grid.Column="4"
                     Margin="8,0"
@@ -122,6 +148,8 @@
                     IsMoveToPointEnabled="True"
                     Maximum="{Binding Duration}"
                     Minimum="0"
+                    PreviewMouseDown="OnSeekStarted"
+                    PreviewMouseUp="OnSeekCompleted"
                     Value="{Binding Position, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
                 <!--  Time  -->
