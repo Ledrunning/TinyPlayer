@@ -1,8 +1,9 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using System.Windows;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Gst;
-using System.Windows;
 using TinyPlayer.Core;
+using TinyPlayer.Core.Events;
 using TinyPlayer.Core.Models;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
@@ -12,42 +13,40 @@ namespace TinyPlayer.Desktop.ViewModel;
 
 public partial class MainViewModel : BaseViewModel
 {
-    private bool _streamsInitialized;
-    private bool _isInternalUpdate;
-    private List<StreamItem> _allSubtitleTracks = [];
-    private bool _coreUpdating;
-    private bool _isUserSeeking;
-    private CancellationTokenSource? _seekCts;
     private const double MaxVolumeDelta = 100.0;
     private const int SeekDebounce = 100;
     private const int MaxVolumePercentage = 100;
+    private readonly List<StreamItem> _allSubtitleTracks = [];
+    private bool _coreUpdating;
 
-    [ObservableProperty]
-    private long _position;
+    [ObservableProperty] private long _duration;
 
-    [ObservableProperty]
-    private long _duration;
+    private nint _hwnd;
+    private bool _isInternalUpdate;
 
-    [ObservableProperty]
-    private string _timeText = "00:00 / 00:00";
+    [ObservableProperty] private bool _isMuted;
 
-    [ObservableProperty]
-    private string _streamInfo = string.Empty;
+    [ObservableProperty] private bool _isPlaying;
 
-    [ObservableProperty]
-    private bool _isPlaying;
+    private bool _isUserSeeking;
 
-    [ObservableProperty]
-    private bool _isMuted;
+    [ObservableProperty] private long _position;
 
-    [ObservableProperty]
-    private bool _subtitlesEnabled;
+    private CancellationTokenSource? _seekCts;
 
-    [ObservableProperty]
-    private StreamItem? _selectedAudioTrack;
+    [ObservableProperty] private StreamItem? _selectedAudioTrack;
 
-    [ObservableProperty]
-    private StreamItem? _selectedSubtitleTrack;
+    [ObservableProperty] private StreamItem? _selectedSubtitleTrack;
+
+    [ObservableProperty] private string _streamInfo = string.Empty;
+
+    private bool _streamsInitialized;
+
+    [ObservableProperty] private bool _subtitlesEnabled;
+
+    [ObservableProperty] private string _timeText = "00:00 / 00:00";
+
+    [ObservableProperty] private double _volume = MaxVolumePercentage;
 
     [RelayCommand(CanExecute = nameof(HasCore))]
     private void TogglePlayPause()
@@ -73,7 +72,8 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand(CanExecute = nameof(HasCore))]
     private void Stop()
     {
-        Core?.Stop(); SetPosition(0);
+        Core?.Stop();
+        SetPosition(0);
     }
 
     [RelayCommand]
@@ -82,12 +82,10 @@ public partial class MainViewModel : BaseViewModel
         base.OpenFile(LoadUri);
     }
 
-    [ObservableProperty]
-    private double _volume = MaxVolumePercentage;
-
-    private nint _hwnd;
-
-    private bool HasCore() => Core != null;
+    private bool HasCore()
+    {
+        return Core != null;
+    }
 
     // Load
     private void LoadUri(string uri)
@@ -134,32 +132,55 @@ public partial class MainViewModel : BaseViewModel
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            AudioTracks.Clear();
-            SubtitleTracks.Clear();
-            _allSubtitleTracks.Clear();
+            _streamsInitialized = false; // Temporarily suspending the response to changes whilst we compile the lists
+            _isInternalUpdate = true;
 
-            for (var i = 0; i < e.Metadata.NumOfAudioStreams; i++)
+            try
             {
-                AudioTracks.Add(new StreamItem
-                {
-                    Index = i,
-                    Title = $"Audio {i}"
-                });
-            }
+                AudioTracks.Clear();
+                SubtitleTracks.Clear();
+                _allSubtitleTracks.Clear();
 
-            for (var i = 0; i < e.Metadata.NumOfSubtitles; i++)
+                // Fill in with pre-defined names from the metadata
+                foreach (var track in e.Metadata.AudioTracks)
+                {
+                    AudioTracks.Add(track);
+                }
+
+                foreach (var track in e.Metadata.SubtitleTracks)
+                {
+                    _allSubtitleTracks.Add(track);
+                }
+
+                // Restore the current audio track from the playbin
+                SelectedAudioTrack = AudioTracks
+                                         .FirstOrDefault(t => t.Index == e.Metadata.CurrentAudioIndex)
+                                     ?? AudioTracks.FirstOrDefault();
+
+                // Subtitles - fill in the list but do NOT switch tracks
+                if (SubtitlesEnabled)
+                {
+                    foreach (var item in _allSubtitleTracks)
+                    {
+                        SubtitleTracks.Add(item);
+                    }
+
+                    // Retrieve the current subtitle from the playbin
+                    // If CurrentSubtitleIndex == -1, there are no subtitles
+                    SelectedSubtitleTrack = e.Metadata.CurrentSubtitleIndex >= 0
+                        ? SubtitleTracks.FirstOrDefault(t => t.Index == e.Metadata.CurrentSubtitleIndex)
+                        : SubtitleTracks.FirstOrDefault();
+                }
+                else
+                {
+                    SelectedSubtitleTrack = null;
+                }
+            }
+            finally
             {
-                var item = new StreamItem
-                {
-                    Index = i,
-                    Title = $"Sub {i}"
-                };
-
-                _allSubtitleTracks.Add(item);
+                _isInternalUpdate = false;
+                _streamsInitialized = true;
             }
-
-            ApplySubtitleFilter();
-            _streamsInitialized = true;
         });
     }
 
@@ -177,9 +198,19 @@ public partial class MainViewModel : BaseViewModel
             }
 
             foreach (var item in _allSubtitleTracks)
+            {
                 SubtitleTracks.Add(item);
+            }
 
-            SelectedSubtitleTrack = SubtitleTracks.FirstOrDefault();
+            // Restore the selected track if it is in the list\
+            // Do NOT automatically reset to the first track
+            if (SelectedSubtitleTrack != null)
+            {
+                SelectedSubtitleTrack = SubtitleTracks
+                    .FirstOrDefault(t => t.Index == SelectedSubtitleTrack.Index);
+            }
+
+            SelectedSubtitleTrack ??= SubtitleTracks.FirstOrDefault();
         }
         finally
         {
@@ -193,22 +224,26 @@ public partial class MainViewModel : BaseViewModel
         {
             return;
         }
+
         Core?.SetVolume(value / MaxVolumeDelta);
     }
 
     partial void OnPositionChanged(long value)
     {
-        if (_coreUpdating) return;
+        if (_coreUpdating)
+        {
+            return;
+        }
 
         if (_isUserSeeking)
         {
-            DebouncedSeek(value);
+            _ = DebouncedSeek(value);
         }
     }
 
-    private async void DebouncedSeek(long value)
+    private async Task DebouncedSeek(long value)
     {
-        _seekCts?.Cancel();
+        _seekCts?.CancelAsync();
 
         var cts = new CancellationTokenSource();
         _seekCts = cts;
@@ -242,7 +277,7 @@ public partial class MainViewModel : BaseViewModel
     }
 
     // Helpers
-    private void SetPosition(long s)
+    private void SetPosition(long seekPosition)
     {
         if (_isUserSeeking)
         {
@@ -250,19 +285,21 @@ public partial class MainViewModel : BaseViewModel
         }
 
         _coreUpdating = true;
-        Position = s;
+        Position = seekPosition;
         _coreUpdating = false;
     }
 
-    private void SetDuration(long s)
+    private void SetDuration(long duration)
     {
         _coreUpdating = true;
-        Duration = s;
+        Duration = duration;
         _coreUpdating = false;
     }
 
     private static string FormatTime(long cur, long dur)
-        => $@"{TimeSpan.FromSeconds(cur):mm\:ss} / {TimeSpan.FromSeconds(dur):mm\:ss}";
+    {
+        return $@"{TimeSpan.FromSeconds(cur):mm\:ss} / {TimeSpan.FromSeconds(dur):mm\:ss}";
+    }
 
     public void SetVideoHandle(IntPtr hwnd)
     {
@@ -271,15 +308,22 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedAudioTrackChanged(StreamItem? value)
     {
+        if (_isInternalUpdate)
+        {
+            return;
+        }
+
         if (!_streamsInitialized)
         {
             return;
         }
 
-        if (value != null)
+        if (value == null)
         {
-            Core?.SetAudioTrack(value.Index);
+            return;
         }
+
+        Core?.SetAudioTrack(value.Index);
     }
 
     partial void OnSelectedSubtitleTrackChanged(StreamItem? value)
@@ -299,17 +343,29 @@ public partial class MainViewModel : BaseViewModel
             return;
         }
 
-        if (value != null)
+        if (value == null)
         {
-            Core?.SetSubtitleTrack(value.Index);
+            return;
         }
+
+        Core?.SetSubtitleTrack(value.Index);
     }
 
     partial void OnSubtitlesEnabledChanged(bool value)
     {
-        Core?.SetSubtitlesEnabled(value);
+        if (!_streamsInitialized)
+        {
+            return;
+        }
 
+        Core?.SetSubtitlesEnabled(value);
         ApplySubtitleFilter();
+
+        // If subtitles are enabled, activate the currently selected track
+        if (value && SelectedSubtitleTrack != null)
+        {
+            Core?.SetSubtitleTrack(SelectedSubtitleTrack.Index);
+        }
     }
 
     private void DisposeCore()

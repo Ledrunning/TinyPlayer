@@ -1,42 +1,32 @@
-﻿using GLib;
+﻿using System.Diagnostics;
+using System.Text;
+using GLib;
 using Gst;
 using Gst.Video;
-using System.Diagnostics;
-using System.Text;
 using TinyPlayer.Core.Enums;
+using TinyPlayer.Core.Events;
+using TinyPlayer.Core.Extensions;
 using TinyPlayer.Core.Models;
+using Application = Gst.Application;
 using Constants = Gst.Constants;
+using ObjectManager = GtkSharp.GstreamerSharp.ObjectManager;
 using TagList = Gst.TagList;
 using Thread = System.Threading.Thread;
+using Timeout = GLib.Timeout;
+using Value = GLib.Value;
 
 namespace TinyPlayer.Core;
-
-public class StreamsAnalysedEventArgs(MetadataModel metadata, string info) : EventArgs
-{
-    public MetadataModel Metadata { get; } = metadata;
-    public string StreamInfo { get; } = info;
-}
 
 public sealed class VideoPlayerCore : IDisposable
 {
     private const int SeekDelayMs = 250; // 33 = 30fps
-    private Element? _playbin;
-    private MainLoop? _mainLoop;
-    private Thread? _mainGlibThread;
-    private uint _refreshUiHandle;
-    private long _duration = -1;
-    private bool _disposed;
     private readonly nint _hwnd;
-
-    public event Action<long, long>? PositionChanged;
-
-    public event EventHandler<StreamsAnalysedEventArgs>? StreamsAnalysed;
-
-    public event Action<string>? ErrorOccurred;
-
-    public event Action? EndOfStream;
-
-    public event Action<State>? StateChanged;
+    private bool _disposed;
+    private long _duration = -1;
+    private Thread? _mainGlibThread;
+    private MainLoop? _mainLoop;
+    private Element? _playbin;
+    private uint _refreshUiHandle;
 
     public VideoPlayerCore(string uri, nint hwnd)
     {
@@ -47,11 +37,47 @@ public sealed class VideoPlayerCore : IDisposable
 
         _hwnd = hwnd;
 
-        Gst.Application.Init();
-        GtkSharp.GstreamerSharp.ObjectManager.Initialize();
+        Application.Init();
+        ObjectManager.Initialize();
 
         InitPipeline(uri);
     }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        if (_refreshUiHandle != 0)
+        {
+            Timeout.Remove(_refreshUiHandle);
+            _refreshUiHandle = 0;
+        }
+
+        if (_playbin != null)
+        {
+            _playbin.SetState(State.Ready);
+            _playbin.SetState(State.Null);
+            _playbin.Dispose();
+            _playbin = null;
+        }
+
+        _mainLoop?.Quit();
+        _mainGlibThread?.Join(TimeSpan.FromSeconds(3));
+    }
+
+    public event Action<long, long>? PositionChanged;
+
+    public event EventHandler<StreamsAnalysedEventArgs>? StreamsAnalysed;
+
+    public event Action<string>? ErrorOccurred;
+
+    public event Action? EndOfStream;
+
+    public event Action<State>? StateChanged;
 
     private void InitPipeline(string uri)
     {
@@ -84,9 +110,16 @@ public sealed class VideoPlayerCore : IDisposable
 
         bus.SyncMessage += (o, args) =>
         {
-            var msg = (Gst.Message)args.Args[0];
-            if (msg.Type != MessageType.Element) return;
-            if (msg.Structure?.Name != "prepare-window-handle") return;
+            var msg = (Message)args.Args[0];
+            if (msg.Type != MessageType.Element)
+            {
+                return;
+            }
+
+            if (msg.Structure?.Name != "prepare-window-handle")
+            {
+                return;
+            }
 
             var overlay = new VideoOverlayAdapter(msg.Src.Handle);
             overlay.WindowHandle = _hwnd;
@@ -98,42 +131,47 @@ public sealed class VideoPlayerCore : IDisposable
         _playbin.Connect("audio-tags-changed", TagsCb);
         _playbin.Connect("text-tags-changed", TagsCb);
 
-        _playbin.SetProperty("flags", new GLib.Value((uint)AvFlagsType.EnableAllFlags));
+        _playbin.SetProperty("flags", new Value((uint)AvFlagsType.EnableAllFlags));
 
         // Waiting for the actual Paused evenе only then is the duration known
         _playbin.SetState(State.Paused);
         _playbin.GetState(out _, out _, Constants.SECOND * 5);
         _playbin.SetState(State.Playing);
 
-        _refreshUiHandle = GLib.Timeout.Add(SeekDelayMs, OnRefreshTimer);
+        _refreshUiHandle = Timeout.Add(SeekDelayMs, OnRefreshTimer);
     }
 
-    public void Play() => _playbin?.SetState(State.Playing);
+    public void Play()
+    {
+        _playbin?.SetState(State.Playing);
+    }
 
-    public void Pause() => _playbin?.SetState(State.Paused);
+    public void Pause()
+    {
+        _playbin?.SetState(State.Paused);
+    }
 
-    public void Stop() => _playbin?.SetState(State.Ready);
+    public void Stop()
+    {
+        _playbin?.SetState(State.Ready);
+    }
 
     public void SeekTo(int seconds)
-        => _playbin?.SeekSimple(
+    {
+        _playbin?.SeekSimple(
             Format.Time,
             SeekFlags.Flush | SeekFlags.Accurate,
-            (long)seconds * Constants.SECOND);
+            seconds * Constants.SECOND);
+    }
 
     public void SetAudioTrack(int index)
     {
-        if (_playbin != null)
-        {
-            _playbin["current-audio"] = index;
-        }
+        _playbin?["current-audio"] = index;
     }
 
     public void SetSubtitleTrack(int index)
     {
-        if (_playbin != null)
-        {
-            _playbin["current-text"] = index;
-        }
+        _playbin?["current-text"] = index;
     }
 
     public void SetSubtitlesEnabled(bool enabled)
@@ -168,8 +206,9 @@ public sealed class VideoPlayerCore : IDisposable
         }
 
         var flags = (uint)_playbin["flags"];
-        _playbin["flags"] = enabled ? flags | (uint)AvFlagsType.Audio
-                                    : flags & ~(uint)AvFlagsType.Audio;
+        _playbin["flags"] = enabled
+            ? flags | (uint)AvFlagsType.Audio
+            : flags & ~(uint)AvFlagsType.Audio;
     }
 
     public void SetVolume(double value)
@@ -183,34 +222,6 @@ public sealed class VideoPlayerCore : IDisposable
         Trace.WriteLine($"[Volume] playbin: {value}");
     }
 
-    public void ApplyFlags(AvFlagsType flags)
-        => _playbin?.SetProperty("flags", new GLib.Value((uint)flags));
-
-    private void OnElementMessage(object o, GLib.SignalArgs args)
-    {
-        var msg = (Gst.Message)args.Args[0];
-
-        var s = msg.Structure;
-        if (s == null)
-            return;
-
-        if (s.Name != "d3d11-present")
-            return;
-
-        try
-        {
-            var handle = (IntPtr)s.GetValue("shared-handle");
-            int width = (int)s.GetValue("width");
-            int height = (int)s.GetValue("height");
-
-            Trace.WriteLine($"[D3D11] frame {width}x{height}, handle={handle}");
-        }
-        catch (Exception ex)
-        {
-            Trace.WriteLine($"[D3D11 ERROR] {ex}");
-        }
-    }
-
     private bool OnRefreshTimer()
     {
         if (_playbin == null)
@@ -218,7 +229,7 @@ public sealed class VideoPlayerCore : IDisposable
             return false;
         }
 
-        _playbin.GetState(out State state, out _, 0);
+        _playbin.GetState(out var state, out _, 0);
         if (state != State.Playing && state != State.Paused)
         {
             return true;
@@ -229,10 +240,10 @@ public sealed class VideoPlayerCore : IDisposable
             _playbin.QueryDuration(Format.Time, out _duration);
         }
 
-        if (_playbin.QueryPosition(Format.Time, out long current))
+        if (_playbin.QueryPosition(Format.Time, out var current))
         {
             PositionChanged?.Invoke(current / Constants.SECOND,
-                                    _duration > 0 ? _duration / Constants.SECOND : 0);
+                _duration > 0 ? _duration / Constants.SECOND : 0);
         }
 
         return true;
@@ -241,7 +252,7 @@ public sealed class VideoPlayerCore : IDisposable
     private void ErrorCb(object o, SignalArgs args)
     {
         var msg = (Message)args.Args[0];
-        msg.ParseError(out GException err, out string debug);
+        msg.ParseError(out var err, out var debug);
         _playbin?.SetState(State.Ready);
         ErrorOccurred?.Invoke($"Error from '{msg.Src.Name}': {err.Message}\nDebug: {debug ?? "(none)"}");
     }
@@ -255,7 +266,7 @@ public sealed class VideoPlayerCore : IDisposable
     private void StateChangedCb(object o, SignalArgs args)
     {
         var msg = (Message)args.Args[0];
-        msg.ParseStateChanged(out _, out State newState, out _);
+        msg.ParseStateChanged(out _, out var newState, out _);
 
         if (msg.Src == _playbin)
         {
@@ -290,90 +301,56 @@ public sealed class VideoPlayerCore : IDisposable
         {
             NumOfVideoStreams = (int)_playbin["n-video"],
             NumOfAudioStreams = (int)_playbin["n-audio"],
-            NumOfSubtitles = (int)_playbin["n-text"]
+            NumOfSubtitles = (int)_playbin["n-text"],
+
+            // Current active tracks from playbin
+            CurrentAudioIndex = (int)_playbin["current-audio"],
+            CurrentSubtitleIndex = (int)_playbin["current-text"]
         };
 
         var sb = new StringBuilder();
-        for (int? i = 0; i < metadata.NumOfVideoStreams; i++)
-        {
-            var tags = (TagList)_playbin.Emit("get-video-tags", i);
-            if (tags == null)
-            {
-                continue;
-            }
 
-            sb.AppendLine($"Video stream {i}:");
-            if (tags.GetString(Constants.TAG_VIDEO_CODEC, out string codec))
-            {
-                sb.AppendLine($"  codec: {codec}");
-            }
-            ((GLib.Opaque)tags).Dispose();
-        }
-
-        for (int? i = 0; i < metadata.NumOfAudioStreams; i++)
+        // Audio
+        for (var i = 0; i < metadata.NumOfAudioStreams; i++)
         {
             var tags = (TagList)_playbin.Emit("get-audio-tags", i);
-            if (tags == null)
+
+            string? lang = null;
+            string? codec = null;
+            uint rate = 0;
+
+            if (tags != null)
             {
-                continue;
+                tags.GetString(Constants.TAG_LANGUAGE_CODE, out lang);
+                tags.GetString(Constants.TAG_AUDIO_CODEC, out codec);
+                tags.GetUint(Constants.TAG_BITRATE, out rate);
+                tags.Dispose();
             }
 
-            sb.AppendLine($"Audio stream {i}:");
+            // Title: Language (if available), otherwise codec, otherwise "Track N"
+            var title = lang?.IsoToLanguageName(codec, rate, i, "Track");
 
-            if (tags.GetString(Constants.TAG_AUDIO_CODEC, out string codec))
-            {
-                sb.AppendLine($"  codec: {codec}");
-            }
-
-            if (tags.GetString(Constants.TAG_LANGUAGE_CODE, out string lang))
-            {
-                sb.AppendLine($"  language: {lang}");
-            }
-
-            if (tags.GetUint(Constants.TAG_BITRATE, out uint rate))
-            {
-                sb.AppendLine($"  bitrate: {rate}");
-            }
-            ((GLib.Opaque)tags).Dispose();
+            metadata.AudioTracks.Add(new StreamItem { Index = i, Title = title });
+            sb.AppendLine($"Audio {i}: {title}");
         }
 
-        for (int? i = 0; i < metadata.NumOfSubtitles; i++)
+        // Subtitles 
+        for (var i = 0; i < metadata.NumOfSubtitles; i++)
         {
             var tags = (TagList)_playbin.Emit("get-text-tags", i);
-            if (tags == null)
-            {
-                continue;
-            }
-            sb.AppendLine($"Subtitle stream {i}:");
 
-            if (tags.GetString(Constants.TAG_LANGUAGE_CODE, out string lang))
+            string? lang = null;
+            if (tags != null)
             {
-                sb.AppendLine($"  language: {lang}");
+                tags.GetString(Constants.TAG_LANGUAGE_CODE, out lang);
+                tags.Dispose();
             }
-            ((GLib.Opaque)tags).Dispose();
+
+            var title = !string.IsNullOrEmpty(lang) ? lang : $"Sub {i}";
+            metadata.SubtitleTracks.Add(new StreamItem { Index = i, Title = title });
+            sb.AppendLine($"Sub {i}: {title}");
         }
+
         StreamsAnalysed?.Invoke(this, new StreamsAnalysedEventArgs(metadata, sb.ToString()));
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-        _disposed = true;
-        if (_refreshUiHandle != 0)
-        {
-            GLib.Timeout.Remove(_refreshUiHandle); _refreshUiHandle = 0;
-        }
-        if (_playbin != null)
-        {
-            _playbin.SetState(State.Ready);
-            _playbin.SetState(State.Null);
-            _playbin.Dispose();
-            _playbin = null;
-        }
-        _mainLoop?.Quit();
-        _mainGlibThread?.Join(TimeSpan.FromSeconds(3));
     }
 }

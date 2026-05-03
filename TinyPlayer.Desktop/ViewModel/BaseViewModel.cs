@@ -1,5 +1,5 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using TinyPlayer.Core;
 using TinyPlayer.Core.Models;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
@@ -11,6 +11,12 @@ public abstract class BaseViewModel : ObservableObject, IDisposable
     protected VideoPlayerCore? Core;
     public ObservableCollection<StreamItem> AudioTracks { get; } = [];
     public ObservableCollection<StreamItem> SubtitleTracks { get; } = [];
+
+    public void Dispose()
+    {
+        Core?.Dispose();
+        Core = null;
+    }
 
     protected virtual void OpenFile(Action<string> loadUri)
     {
@@ -25,12 +31,6 @@ public abstract class BaseViewModel : ObservableObject, IDisposable
             return;
         }
 
-        loadUri?.Invoke(new Uri(dlg.FileName).AbsoluteUri);
-    }
-
-    public void Dispose()
-    {
-        Core?.Dispose();
-        Core = null;
+        loadUri.Invoke(new Uri(dlg.FileName).AbsoluteUri);
     }
 }
