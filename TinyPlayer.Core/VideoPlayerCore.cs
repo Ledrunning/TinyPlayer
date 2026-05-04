@@ -353,4 +353,22 @@ public sealed class VideoPlayerCore : IDisposable
 
         StreamsAnalysed?.Invoke(this, new StreamsAnalysedEventArgs(metadata, sb.ToString()));
     }
+
+    public void SetRenderSize(int w, int h)
+    {
+        if (_playbin == null)
+        {
+            return;
+        }
+
+        var overlay = ((Bin)_playbin)?.GetByInterface(VideoOverlayAdapter.GType);
+        if (overlay == null)
+        {
+            return;
+        }
+
+        var adapter = new VideoOverlayAdapter(overlay.Handle);
+        adapter.SetRenderRectangle(0, 0, w, h);
+        adapter.Expose();
+    }
 }
