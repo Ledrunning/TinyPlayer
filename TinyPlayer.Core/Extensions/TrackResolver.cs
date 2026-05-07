@@ -1,10 +1,11 @@
 ﻿using System.Globalization;
+using TinyPlayer.Core.Models;
 
 namespace TinyPlayer.Core.Extensions;
 
 public static class TrackResolver
 {
-    public static string IsoToLanguageName(this string code, string? codec, uint bitrate, int index, string prefix)
+    public static string IsoToLanguageName(this string code, MetadataLanguage metadata)
     {
         string? name = null;
 
@@ -18,14 +19,14 @@ public static class TrackResolver
             return name;
         }
 
-        // Fallback — кодек + битрейт
-        if (!string.IsNullOrEmpty(codec))
+        // Fallback codec + bitrate
+        if (!string.IsNullOrEmpty(metadata.Codec))
         {
-            return bitrate > 0
-                ? $"{codec} {bitrate / 1000}kbps"
-                : codec;
+            return metadata.Bitrate > 0
+                ? $"{metadata.Codec} {metadata.Bitrate / 1000}kbps"
+                : metadata.Codec;
         }
 
-        return $"{prefix} {index}";
+        return $"{metadata.Prefix} {metadata.Index}";
     }
 }

@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿using System.Diagnostics;
+using System.Windows;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Gst;
@@ -16,37 +18,52 @@ public partial class MainViewModel : BaseViewModel
     private const double MaxVolumeDelta = 100.0;
     private const int SeekDebounce = 100;
     private const int MaxVolumePercentage = 100;
-    private readonly List<StreamItem> _allSubtitleTracks = [];
+
+    [ObservableProperty] private Visibility _controlsVisibility = Visibility.Visible;
     private bool _coreUpdating;
-
     [ObservableProperty] private long _duration;
-
+    private DispatcherTimer? _hideControlsTimer;
     private nint _hwnd;
+    [ObservableProperty] private bool _isControlsVisible = true;
     private bool _isInternalUpdate;
-
     [ObservableProperty] private bool _isMuted;
-
     [ObservableProperty] private bool _isPlaying;
-
     private bool _isUserSeeking;
-
     [ObservableProperty] private long _position;
-
     private CancellationTokenSource? _seekCts;
-
     [ObservableProperty] private StreamItem? _selectedAudioTrack;
-
     [ObservableProperty] private StreamItem? _selectedSubtitleTrack;
-
     [ObservableProperty] private string _streamInfo = string.Empty;
-
     private bool _streamsInitialized;
-
     [ObservableProperty] private bool _subtitlesEnabled;
-
     [ObservableProperty] private string _timeText = "00:00 / 00:00";
-
+    [ObservableProperty] private Visibility _titleBarVisibility = Visibility.Visible;
     [ObservableProperty] private double _volume = MaxVolumePercentage;
+    [ObservableProperty] private WindowState _windowState = WindowState.Normal;
+    [ObservableProperty] private WindowStyle _windowStyle = WindowStyle.SingleBorderWindow;
+
+    [RelayCommand]
+    private void ToggleFullscreen()
+    {
+        var isFullscreen = WindowState == WindowState.Maximized;
+
+        if (!isFullscreen)
+        {
+            // Switch to fullscreen — first set to None, then Maximised;
+            // otherwise the taskbar won't be hidden
+            WindowStyle = WindowStyle.None;
+            WindowState = WindowState.Maximized;
+            TitleBarVisibility = Visibility.Collapsed;
+            ControlsVisibility = Visibility.Collapsed;
+        }
+        else
+        {
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            WindowState = WindowState.Normal;
+            TitleBarVisibility = Visibility.Visible;
+            ControlsVisibility = Visibility.Visible;
+        }
+    }
 
     [RelayCommand(CanExecute = nameof(HasCore))]
     private void TogglePlayPause()
@@ -104,7 +121,6 @@ public partial class MainViewModel : BaseViewModel
         Core?.StreamsAnalysed -= OnStreamsAnalysed;
         Core?.StreamsAnalysed += OnStreamsAnalysed;
 
-        //TODO : add custom message box!
         Core?.ErrorOccurred += msg =>
             Application.Current?.Dispatcher.Invoke(() =>
                 MessageBox.Show(msg, "Playback error",
@@ -128,20 +144,39 @@ public partial class MainViewModel : BaseViewModel
         ToggleMuteCommand.NotifyCanExecuteChanged();
     }
 
+    public void OnVideoClick()
+    {
+        IsControlsVisible = true;
+
+        _hideControlsTimer?.Stop();
+        _hideControlsTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(3)
+        };
+        _hideControlsTimer.Tick += (_, _) =>
+        {
+            _hideControlsTimer.Stop();
+            if (IsPlaying)
+            {
+                IsControlsVisible = false;
+            }
+        };
+        _hideControlsTimer.Start();
+    }
+
     private void OnStreamsAnalysed(object? sender, StreamsAnalysedEventArgs e)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            _streamsInitialized = false; // Temporarily suspending the response to changes whilst we compile the lists
+            _streamsInitialized = false;
             _isInternalUpdate = true;
 
             try
             {
                 AudioTracks.Clear();
                 SubtitleTracks.Clear();
-                _allSubtitleTracks.Clear();
+                AllSubtitleTracks.Clear();
 
-                // Fill in with pre-defined names from the metadata
                 foreach (var track in e.Metadata.AudioTracks)
                 {
                     AudioTracks.Add(track);
@@ -149,31 +184,34 @@ public partial class MainViewModel : BaseViewModel
 
                 foreach (var track in e.Metadata.SubtitleTracks)
                 {
-                    _allSubtitleTracks.Add(track);
+                    AllSubtitleTracks.Add(track);
                 }
 
-                // Restore the current audio track from the playbin
+                // Restore the audio track and apply it
                 SelectedAudioTrack = AudioTracks
                                          .FirstOrDefault(t => t.Index == e.Metadata.CurrentAudioIndex)
                                      ?? AudioTracks.FirstOrDefault();
 
-                // Subtitles - fill in the list but do NOT switch tracks
-                if (SubtitlesEnabled)
+                if (SelectedAudioTrack != null)
                 {
-                    foreach (var item in _allSubtitleTracks)
-                    {
-                        SubtitleTracks.Add(item);
-                    }
-
-                    // Retrieve the current subtitle from the playbin
-                    // If CurrentSubtitleIndex == -1, there are no subtitles
-                    SelectedSubtitleTrack = e.Metadata.CurrentSubtitleIndex >= 0
-                        ? SubtitleTracks.FirstOrDefault(t => t.Index == e.Metadata.CurrentSubtitleIndex)
-                        : SubtitleTracks.FirstOrDefault();
+                    Core?.SetAudioTrack(SelectedAudioTrack.Index);
                 }
-                else
+
+                // Subtitles — populate the list but do not enable them
+                // Enable only via the CC button using SubtitlesEnabled
+                foreach (var item in AllSubtitleTracks)
                 {
-                    SelectedSubtitleTrack = null;
+                    SubtitleTracks.Add(item);
+                }
+
+                SelectedSubtitleTrack = SubtitleTracks.FirstOrDefault();
+
+                // Set the current state of SubtitlesEnabled
+                Core?.SetSubtitlesEnabled(SubtitlesEnabled);
+
+                if (SubtitlesEnabled && SelectedSubtitleTrack != null)
+                {
+                    Core?.SetSubtitleTrack(SelectedSubtitleTrack.Index);
                 }
             }
             finally
@@ -197,7 +235,7 @@ public partial class MainViewModel : BaseViewModel
                 return;
             }
 
-            foreach (var item in _allSubtitleTracks)
+            foreach (var item in AllSubtitleTracks)
             {
                 SubtitleTracks.Add(item);
             }
@@ -257,9 +295,9 @@ public partial class MainViewModel : BaseViewModel
                 Core?.SeekTo((int)value);
             }
         }
-        catch (TaskCanceledException)
+        catch (TaskCanceledException e)
         {
-            // TODO: add log
+            Trace.TraceError(e.Message);
         }
     }
 

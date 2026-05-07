@@ -12,6 +12,8 @@ public abstract class BaseViewModel : ObservableObject, IDisposable
     public ObservableCollection<StreamItem> AudioTracks { get; } = [];
     public ObservableCollection<StreamItem> SubtitleTracks { get; } = [];
 
+    public readonly List<StreamItem> AllSubtitleTracks = [];
+
     public void Dispose()
     {
         Core?.Dispose();
