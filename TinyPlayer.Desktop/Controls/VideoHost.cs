@@ -26,7 +26,7 @@ public class VideoHost : HwndHost
         return new HandleRef(this, Handle);
     }
 
-    // При ресайзе WPF элемента — двигаем нативное окно под новый размер
+    // When resizing a WPF element, resize the native window to fit the new dimensions
     protected override void OnRenderSizeChanged(SizeChangedInfo info)
     {
         base.OnRenderSizeChanged(info);

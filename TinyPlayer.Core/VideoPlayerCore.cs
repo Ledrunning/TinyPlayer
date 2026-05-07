@@ -133,7 +133,7 @@ public sealed class VideoPlayerCore : IDisposable
 
         _playbin.SetProperty("flags", new Value((uint)AvFlagsType.EnableAllFlags));
 
-        // Waiting for the actual Paused evenе only then is the duration known
+        // Waiting for the actual Paused even only then is the duration known
         _playbin.SetState(State.Paused);
         _playbin.GetState(out _, out _, Constants.SECOND * 5);
         _playbin.SetState(State.Playing);
@@ -286,8 +286,8 @@ public sealed class VideoPlayerCore : IDisposable
 
     private static void TagsCb(object sender, SignalArgs args)
     {
-        var el = sender as Element;
-        el?.PostMessage(Message.NewApplication(el, new Structure("tags-changed")));
+        var element = sender as Element;
+        element?.PostMessage(Message.NewApplication(element, new Structure("tags-changed")));
     }
 
     private void AnalyseStreams()
@@ -328,13 +328,19 @@ public sealed class VideoPlayerCore : IDisposable
             }
 
             // Title: Language (if available), otherwise codec, otherwise "Track N"
-            var title = lang?.IsoToLanguageName(codec, rate, i, "Track");
+            var title = lang?.IsoToLanguageName(new MetadataLanguage
+            {
+                Codec = codec,
+                Bitrate = rate,
+                Index = i,
+                Prefix = "Track"
+            });
 
             metadata.AudioTracks.Add(new StreamItem { Index = i, Title = title });
             sb.AppendLine($"Audio {i}: {title}");
         }
 
-        // Subtitles 
+        // Subtitles
         for (var i = 0; i < metadata.NumOfSubtitles; i++)
         {
             var tags = (TagList)_playbin.Emit("get-text-tags", i);
