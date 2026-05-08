@@ -2,7 +2,9 @@
 
 A lightweight video player built with WPF, GStreamer, and the [WPF-UI](https://github.com/lepoco/wpfui) framework featuring a modern Fluent Design interface.
 
-![TinyPlayer Screenshot](screenshot.png)
+![TinyPlayer Screenshot](Screenshot_en.png)
+
+![TinyPlayer Screenshot](Screenshot_de.png)
 
 ## Features
 
