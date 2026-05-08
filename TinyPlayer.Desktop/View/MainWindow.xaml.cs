@@ -1,24 +1,65 @@
-﻿using System.Windows;
+﻿using System.Windows.Input;
 using TinyPlayer.Desktop.ViewModel;
 using Wpf.Ui.Controls;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 
-namespace TinyPlayer.Desktop.View
+namespace TinyPlayer.Desktop.View;
+
+/// <summary>
+///     Interaction logic for MainWindow.xaml
+/// </summary>
+public partial class MainWindow : FluentWindow
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
-    public partial class MainWindow : FluentWindow
+    public MainWindow(MainViewModel viewModel)
     {
-        private MainViewModel Vm => (MainViewModel)DataContext;
+        InitializeComponent();
 
-        public MainWindow(MainViewModel viewModel)
+        Vm = viewModel;
+        DataContext = Vm;
+
+        Loaded += (_, _) => { Vm.SetVideoHandle(VideoSurface.Handle); };
+    }
+
+    public MainViewModel Vm { get; }
+
+    private void OnSeekStarted(object sender, MouseButtonEventArgs e)
+    {
+        Vm.BeginSeek();
+    }
+
+    private void OnSeekCompleted(object sender, MouseButtonEventArgs e)
+    {
+        Vm.EndSeek();
+    }
+
+    private void Window_Closed(object sender, EventArgs e)
+    {
+        Vm.Dispose();
+    }
+
+    private void VideoGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        Vm.OnVideoClick();
+
+        if (e.ClickCount == 2)
         {
-            InitializeComponent();
+            Vm.ToggleFullscreenCommand.Execute(null);
+        }
+    }
 
-            // Pass the HWND to the VM once it will store it and use it every time LoadUri is called
-            Loaded += (_, _) => Vm.SetVideoHandle(VideoHost.Panel.Handle);
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            Vm.ToggleFullscreenCommand.Execute(null);
         }
 
-        private void Window_Closed(object sender, EventArgs e) => Vm.Dispose();
+        base.OnKeyDown(e);
+    }
+
+    private void VideoGrid_MouseMove(object sender, MouseEventArgs e)
+    {
+        Vm.OnVideoClick();
     }
 }

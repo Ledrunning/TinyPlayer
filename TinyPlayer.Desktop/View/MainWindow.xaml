@@ -10,16 +10,19 @@
     Title="TinyPlayer"
     Width="900"
     Height="550"
+    d:DataContext="{d:DesignInstance Type=viewmodel:MainViewModel}"
     Closed="Window_Closed"
     ExtendsContentIntoTitleBar="True"
     WindowBackdropType="Mica"
     WindowCornerPreference="Round"
     WindowStartupLocation="CenterScreen"
+    WindowState="{Binding WindowState, Mode=TwoWay}"
+    WindowStyle="{Binding WindowStyle, Mode=TwoWay}"
     mc:Ignorable="d">
 
-    <Window.DataContext>
-        <viewmodel:MainViewModel />
-    </Window.DataContext>
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -31,62 +34,88 @@
         <ui:TitleBar
             Title="TinyPlayer"
             Grid.Row="0"
-            Margin="42,0,0,0">
+            Margin="0,0,0,0"
+            Visibility="{Binding TitleBarVisibility}">
             <ui:TitleBar.Header>
-                <ui:Button
-                    Margin="4,0,0,0"
-                    Appearance="Transparent"
-                    Command="{Binding OpenFileCommand}"
-                    Icon="{ui:SymbolIcon FolderOpen24}"
-                    ToolTip="Открыть файл" />
+                <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                    <ui:Button
+                        Margin="0,0,8,0"
+                        Appearance="Transparent"
+                        Command="{Binding OpenFileCommand}"
+                        Icon="{ui:SymbolIcon FolderOpen24}"
+                        ToolTip="Open file" />
+
+                    <ComboBox
+                        Width="100"
+                        Margin="0,0,8,0"
+                        DisplayMemberPath="Title"
+                        ItemsSource="{Binding AudioTracks}"
+                        SelectedItem="{Binding SelectedAudioTrack}" />
+                    <ComboBox
+                        Width="100"
+                        Margin="0,0,8,0"
+                        DisplayMemberPath="Title"
+                        ItemsSource="{Binding SubtitleTracks}"
+                        SelectedItem="{Binding SelectedSubtitleTrack}" />
+                    <ui:ToggleSwitch Margin="0,0,8,0" IsChecked="{Binding SubtitlesEnabled}" />
+                    <Label Margin="0,10,8,0" Content="CC" />
+                </StackPanel>
             </ui:TitleBar.Header>
         </ui:TitleBar>
 
-        <Border
+        <Grid
             Grid.Row="1"
-            Margin="12"
-            ClipToBounds="True"
-            CornerRadius="8">
-            <controls:VideoPanel x:Name="VideoHost" />
-        </Border>
+            Background="Black"
+            MouseLeftButtonDown="VideoGrid_MouseLeftButtonDown"
+            MouseMove="VideoGrid_MouseMove">
+            <controls:VideoHost x:Name="VideoSurface" />
+        </Grid>
 
         <Border
             Grid.Row="2"
             Margin="12,0,12,12"
             Background="{DynamicResource ControlFillColorSecondaryBrush}"
-            CornerRadius="12,12,0,0">
-            <Grid VerticalAlignment="Center">
+            CornerRadius="12,12,0,0"
+            Visibility="{Binding IsControlsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid Margin="12,0" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
+                    <!--  0: Play/Pause  -->
                     <ColumnDefinition Width="Auto" />
+                    <!--  1: Stop  -->
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
+                    <!--  2: Mute  -->
+                    <ColumnDefinition Width="100" />
+                    <!--  3: Volume  -->
                     <ColumnDefinition Width="*" />
+                    <!--  4: Progress  -->
                     <ColumnDefinition Width="Auto" />
+                    <!--  5: Time  -->
                 </Grid.ColumnDefinitions>
 
+                <!--  Play/Pause  -->
                 <ui:Button
                     Grid.Column="0"
                     Width="60"
                     Height="35"
-                    Margin="12,0,6,0"
+                    Margin="0,0,4,0"
                     Appearance="Primary"
-                    Command="{Binding PlayCommand}"
-                    Content="▶"
-                    FontSize="24" />
+                    Command="{Binding TogglePlayPauseCommand}">
+                    <ui:Button.Style>
+                        <Style BasedOn="{StaticResource {x:Type ui:Button}}" TargetType="ui:Button">
+                            <Setter Property="Icon" Value="{ui:SymbolIcon Symbol=Play24}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <Setter Property="Icon" Value="{ui:SymbolIcon Symbol=Pause24}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ui:Button.Style>
+                </ui:Button>
 
+                <!--  Stop  -->
                 <ui:Button
                     Grid.Column="1"
-                    Width="60"
-                    Height="35"
-                    Margin="0,0,6,0"
-                    Appearance="Primary"
-                    Command="{Binding PauseCommand}"
-                    Content="⏸"
-                    FontSize="24" />
-
-                <ui:Button
-                    Grid.Column="2"
                     Width="60"
                     Height="35"
                     Margin="0,0,6,0"
@@ -95,32 +124,55 @@
                     Content="■"
                     FontSize="24" />
 
+                <!--  Mute  -->
                 <ui:Button
-                    Grid.Column="3"
-                    Width="60"
+                    Grid.Column="2"
+                    Width="38"
                     Height="35"
-                    Margin="0,0,6,0"
-                    Appearance="Secondary"
-                    Command="{Binding OpenFileCommand}"
-                    Icon="{ui:SymbolIcon FolderOpen24}"
-                    ToolTip="Открыть файл" />
+                    Margin="0,0,4,0"
+                    Appearance="Primary"
+                    Command="{Binding ToggleMuteCommand}">
+                    <ui:Button.Style>
+                        <Style BasedOn="{StaticResource {x:Type ui:Button}}" TargetType="ui:Button">
+                            <Setter Property="Icon" Value="{ui:SymbolIcon Speaker224}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                                    <Setter Property="Icon" Value="{ui:SymbolIcon SpeakerOff24}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ui:Button.Style>
+                </ui:Button>
 
+                <!--  Volume  -->
+                <Slider
+                    Grid.Column="3"
+                    VerticalAlignment="Center"
+                    IsMoveToPointEnabled="True"
+                    Maximum="100"
+                    Minimum="0"
+                    Value="{Binding Volume, Mode=TwoWay}" />
+
+                <!--  Progress  -->
                 <Slider
                     Grid.Column="4"
-                    Margin="12,0"
+                    Margin="8,0"
                     VerticalAlignment="Center"
                     IsMoveToPointEnabled="True"
                     Maximum="{Binding Duration}"
                     Minimum="0"
+                    PreviewMouseDown="OnSeekStarted"
+                    PreviewMouseUp="OnSeekCompleted"
                     Value="{Binding Position, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
+                <!--  Time  -->
                 <TextBlock
                     Grid.Column="5"
-                    Margin="0,0,12,0"
                     VerticalAlignment="Center"
                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                     Text="{Binding TimeText}" />
             </Grid>
         </Border>
+
     </Grid>
 </ui:FluentWindow>
