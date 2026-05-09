@@ -3,6 +3,8 @@ using System.Text;
 using GLib;
 using Gst;
 using Gst.Video;
+using Microsoft.Extensions.Logging;
+using Serilog;
 using TinyPlayer.Core.Abstractions;
 using TinyPlayer.Core.Enums;
 using TinyPlayer.Core.Events;
@@ -28,8 +30,9 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
     private MainLoop? _mainLoop;
     private Element? _playbin;
     private uint _refreshUiHandle;
+    private readonly ILogger<VideoPlayerCore> _logger;
 
-    public VideoPlayerCore(string uri, nint hwnd)
+    public VideoPlayerCore(string uri, nint hwnd, ILogger<VideoPlayerCore> logger)
     {
         if (string.IsNullOrWhiteSpace(uri))
         {
@@ -37,6 +40,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
         }
 
         _hwnd = hwnd;
+        _logger = logger;
 
         Application.Init();
         ObjectManager.Initialize();
@@ -94,7 +98,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
         if (audioSink != null)
         {
             _playbin["audio-sink"] = audioSink;
-            Trace.WriteLine("[Audio] directsoundsink set");
+            _logger.LogInformation("[Audio] directsoundsink set");
         }
 
         var sink = ElementFactory.Make("d3dvideosink", "video_sink");
@@ -125,7 +129,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
             var overlay = new VideoOverlayAdapter(msg.Src.Handle);
             overlay.WindowHandle = _hwnd;
             overlay.HandleEvents(true);
-            Trace.WriteLine("[VIDEO] HWND attached");
+            _logger.LogInformation("[VIDEO] HWND attached");
         };
 
         _playbin.Connect("video-tags-changed", TagsCb);
@@ -220,7 +224,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
         }
 
         _playbin["volume"] = value;
-        Trace.WriteLine($"[Volume] playbin: {value}");
+        _logger.LogInformation("[Volume] playbin: {Value}", value);
     }
 
     private bool OnRefreshTimer()
@@ -357,7 +361,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
             metadata.SubtitleTracks.Add(new StreamItem { Index = i, Title = title });
             sb.AppendLine($"Sub {i}: {title}");
         }
-
+       
         StreamsAnalysed?.Invoke(this, new StreamsAnalysedEventArgs(metadata, sb.ToString()));
     }
 
