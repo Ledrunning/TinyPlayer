@@ -2,6 +2,10 @@
 
 A lightweight video player built with WPF, GStreamer, and the [WPF-UI](https://github.com/lepoco/wpfui) framework featuring a modern Fluent Design interface.
 
+[![Build](https://github.com/Ledrunning/TinyPlayer/actions/workflows/build.yml/badge.svg)](https://github.com/yourusername/TinyPlayer/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com)
+
 ![TinyPlayer Screenshot](Screenshot_en.png)
 
 ![TinyPlayer Screenshot](Screenshot_de.png)
@@ -75,7 +79,7 @@ TinyPlayer/
 └── TinyPlayer.Tests/             # xUnit 3 test project
     ├── Core/                     # Tests for TinyPlayer.Core
     └── Desktop/                  # Tests for ViewModels
-	
+
 ```
 
 ## Architecture
@@ -117,4 +121,7 @@ Good sources for testing multiple audio tracks and subtitles:
 ## License
 
 MIT
+
+```
+
 ```
