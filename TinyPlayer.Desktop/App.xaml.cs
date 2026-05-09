@@ -10,6 +10,8 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
+using TinyPlayer.Core;
+using TinyPlayer.Core.Abstractions;
 using TinyPlayer.Desktop.View;
 using TinyPlayer.Desktop.ViewModel;
 
@@ -32,6 +34,7 @@ namespace TinyPlayer
             {
 
                 // Views and ViewModels
+                services.AddSingleton<IVideoPlayerFactory, VideoPlayerFactory>();
                 services.AddScoped<MainWindow>();
                 services.AddScoped<MainViewModel>();
 

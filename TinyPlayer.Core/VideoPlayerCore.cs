@@ -3,6 +3,7 @@ using System.Text;
 using GLib;
 using Gst;
 using Gst.Video;
+using TinyPlayer.Core.Abstractions;
 using TinyPlayer.Core.Enums;
 using TinyPlayer.Core.Events;
 using TinyPlayer.Core.Extensions;
@@ -17,7 +18,7 @@ using Value = GLib.Value;
 
 namespace TinyPlayer.Core;
 
-public sealed class VideoPlayerCore : IDisposable
+public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
 {
     private const int SeekDelayMs = 250; // 33 = 30fps
     private readonly nint _hwnd;

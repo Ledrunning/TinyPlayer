@@ -49,23 +49,33 @@ dotnet run --project TinyPlayer.Desktop
 ## Project Structure
 
 ```
+## Project Structure
+
+```
+
+## Project Structure
+
+```
 TinyPlayer/
-├── TinyPlayer.Core/          # GStreamer core library (framework-agnostic)
-│   ├── VideoPlayerCore.cs    # Pipeline management
-│   ├── VideoSinkFactory.cs   # Video sink setup & HWND overlay
-│   ├── Enums/
-│   │   └── AvFlagsType.cs
-│   └── Models/
-│       ├── MetadataModel.cs
-│       └── StreamItem.cs
+├── TinyPlayer.Core/              # GStreamer core library (framework-agnostic)
+│   ├── Abstractions/             # Interfaces (IVideoPlayerCore, IVideoPlayerFactory)
+│   ├── Enums/                    # AvFlagsType
+│   ├── Events/                   # StreamsAnalysedEventArgs
+│   ├── Extensions/               # TrackResolver, IsoToLanguageName
+│   └── Models/                   # MetadataModel, StreamItem
 │
-└── TinyPlayer.Desktop/       # WPF UI application
-    ├── View/
-    │   └── MainWindow.xaml
-    ├── ViewModel/
-    │   └── MainViewModel.cs
-    └── Controls/
-        └── VideoHost.cs      # HwndHost for GStreamer overlay
+├── TinyPlayer.Desktop/           # WPF UI application
+│   ├── Assets/                   # Icons, images
+│   ├── Controls/                 # VideoHost (HwndHost)
+│   ├── View/                     # MainWindow.xaml
+│   ├── ViewModel/                # MainViewModel
+│   └── Properties/
+│       └── PublishProfiles/
+│
+└── TinyPlayer.Tests/             # xUnit 3 test project
+    ├── Core/                     # Tests for TinyPlayer.Core
+    └── Desktop/                  # Tests for ViewModels
+	
 ```
 
 ## Architecture
@@ -107,3 +117,4 @@ Good sources for testing multiple audio tracks and subtitles:
 ## License
 
 MIT
+```
