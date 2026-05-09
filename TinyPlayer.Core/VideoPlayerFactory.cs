@@ -1,8 +1,11 @@
-﻿using TinyPlayer.Core.Abstractions;
+﻿using Microsoft.Extensions.Logging;
+using TinyPlayer.Core.Abstractions;
 
 namespace TinyPlayer.Core;
 
-public class VideoPlayerFactory : IVideoPlayerFactory
+public class VideoPlayerFactory(ILogger<VideoPlayerCore> logger) : IVideoPlayerFactory
 {
-    public VideoPlayerCore Create(string uri, IntPtr hwnd) => new(uri, hwnd);
+    private readonly ILogger<VideoPlayerCore> _logger = logger;
+
+    public VideoPlayerCore Create(string uri, IntPtr hwnd) => new(uri, hwnd, _logger);  
 }
