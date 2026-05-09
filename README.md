@@ -2,6 +2,10 @@
 
 A lightweight video player built with WPF, GStreamer, and the [WPF-UI](https://github.com/lepoco/wpfui) framework featuring a modern Fluent Design interface.
 
+[![Build](https://github.com/Ledrunning/TinyPlayer/actions/workflows/dotnet-desktop.yml/badge.svg)](https://github.com/Ledrunning/TinyPlayer/actions/workflows/dotnet-desktop.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com)
+
 ![TinyPlayer Screenshot](Screenshot_en.png)
 
 ![TinyPlayer Screenshot](Screenshot_de.png)
@@ -49,23 +53,33 @@ dotnet run --project TinyPlayer.Desktop
 ## Project Structure
 
 ```
+## Project Structure
+
+```
+
+## Project Structure
+
+```
 TinyPlayer/
-├── TinyPlayer.Core/          # GStreamer core library (framework-agnostic)
-│   ├── VideoPlayerCore.cs    # Pipeline management
-│   ├── VideoSinkFactory.cs   # Video sink setup & HWND overlay
-│   ├── Enums/
-│   │   └── AvFlagsType.cs
-│   └── Models/
-│       ├── MetadataModel.cs
-│       └── StreamItem.cs
+├── TinyPlayer.Core/              # GStreamer core library (framework-agnostic)
+│   ├── Abstractions/             # Interfaces (IVideoPlayerCore, IVideoPlayerFactory)
+│   ├── Enums/                    # AvFlagsType
+│   ├── Events/                   # StreamsAnalysedEventArgs
+│   ├── Extensions/               # TrackResolver, IsoToLanguageName
+│   └── Models/                   # MetadataModel, StreamItem
 │
-└── TinyPlayer.Desktop/       # WPF UI application
-    ├── View/
-    │   └── MainWindow.xaml
-    ├── ViewModel/
-    │   └── MainViewModel.cs
-    └── Controls/
-        └── VideoHost.cs      # HwndHost for GStreamer overlay
+├── TinyPlayer.Desktop/           # WPF UI application
+│   ├── Assets/                   # Icons, images
+│   ├── Controls/                 # VideoHost (HwndHost)
+│   ├── View/                     # MainWindow.xaml
+│   ├── ViewModel/                # MainViewModel
+│   └── Properties/
+│       └── PublishProfiles/
+│
+└── TinyPlayer.Tests/             # xUnit 3 test project
+    ├── Core/                     # Tests for TinyPlayer.Core
+    └── Desktop/                  # Tests for ViewModels
+
 ```
 
 ## Architecture
@@ -107,3 +121,7 @@ Good sources for testing multiple audio tracks and subtitles:
 ## License
 
 MIT
+
+```
+
+```

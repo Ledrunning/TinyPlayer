@@ -6,12 +6,16 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
 using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
+using TinyPlayer.Core;
+using TinyPlayer.Core.Abstractions;
 using TinyPlayer.Desktop.View;
 using TinyPlayer.Desktop.ViewModel;
+using MessageBox = System.Windows.MessageBox;
 
 namespace TinyPlayer
 {
@@ -27,17 +31,25 @@ namespace TinyPlayer
         // https://docs.microsoft.com/dotnet/core/extensions/logging
         private static readonly IHost _host = Host
             .CreateDefaultBuilder()
-            .ConfigureAppConfiguration(c => { c.SetBasePath(basePath: Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)); })
+            .UseSerilog((context, config) =>        // ← вот это
+            {
+                config
+                    .MinimumLevel.Debug()
+                    .WriteTo.File(
+                        path: "logs/tinyplayer-.log",
+                        rollingInterval: RollingInterval.Day,
+                        retainedFileCountLimit: 7)
+                    .WriteTo.Debug();
+            })
+            .ConfigureAppConfiguration(c => { c.SetBasePath(basePath: Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location) 
+                ?? throw new InvalidOperationException("Unable to determine assembly location")); })
             .ConfigureServices((context, services) =>
             {
 
                 // Views and ViewModels
+                services.AddSingleton<IVideoPlayerFactory, VideoPlayerFactory>();
                 services.AddScoped<MainWindow>();
                 services.AddScoped<MainViewModel>();
-
-                // Add services
-
-
             }).Build();
 
         /// <summary>
@@ -56,11 +68,21 @@ namespace TinyPlayer
         /// </summary>
         private void OnStartup(object sender, StartupEventArgs e)
         {
-            _host.Start();
-
-            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-            Current.MainWindow = mainWindow;
-            mainWindow.Show();
+            try
+            {
+                _host.Start();
+                var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+                Current.MainWindow = mainWindow;
+                Log.Information("Application started");
+                mainWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Application failed to start");
+                MessageBox.Show($"Failed to start: {ex.Message}", "TinyPlayer",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Shutdown(1);
+            }
         }
 
         /// <summary>
@@ -68,9 +90,20 @@ namespace TinyPlayer
         /// </summary>
         private async void OnExit(object sender, ExitEventArgs e)
         {
-            await _host.StopAsync();
-
-            _host.Dispose();
+            try
+            {
+                Log.Information("Application is shutting down");
+                await _host.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during shutdown");
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+                _host.Dispose();
+            }
         }
 
         /// <summary>
@@ -78,7 +111,10 @@ namespace TinyPlayer
         /// </summary>
         private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            // For more info see https://docs.microsoft.com/en-us/dotnet/api/system.windows.application.dispatcherunhandledexception?view=windowsdesktop-6.0
+            Log.Error(e.Exception, "Unhandled exception");
+            MessageBox.Show($"Unexpected error: {e.Exception.Message}", "TinyPlayer",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            e.Handled = true;
         }
     }
 }

@@ -4,7 +4,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Gst;
-using TinyPlayer.Core;
+using TinyPlayer.Core.Abstractions;
 using TinyPlayer.Core.Events;
 using TinyPlayer.Core.Models;
 using Application = System.Windows.Application;
@@ -13,12 +13,12 @@ using Task = System.Threading.Tasks.Task;
 
 namespace TinyPlayer.Desktop.ViewModel;
 
-public partial class MainViewModel : BaseViewModel
+public partial class MainViewModel(IVideoPlayerFactory factory) : BaseViewModel
 {
     private const double MaxVolumeDelta = 100.0;
     private const int SeekDebounce = 100;
     private const int MaxVolumePercentage = 100;
-
+    private readonly IVideoPlayerFactory _factory = factory;
     [ObservableProperty] private Visibility _controlsVisibility = Visibility.Visible;
     private bool _coreUpdating;
     [ObservableProperty] private long _duration;
@@ -109,7 +109,7 @@ public partial class MainViewModel : BaseViewModel
     {
         DisposeCore();
 
-        Core = new VideoPlayerCore(uri, _hwnd);
+        Core = _factory.Create(uri, _hwnd);
         Core.PositionChanged += (cur, dur) =>
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
