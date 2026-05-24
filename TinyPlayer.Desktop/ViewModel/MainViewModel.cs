@@ -49,8 +49,7 @@ public partial class MainViewModel(IVideoPlayerFactory factory) : BaseViewModel
 
         if (!isFullscreen)
         {
-            // Switch to fullscreen — first set to None, then Maximised;
-            // otherwise the taskbar won't be hidden
+            // Switch to fullscreen first set to None, then Maximised otherwise the taskbar won't be hidden
             WindowStyle = WindowStyle.None;
             WindowState = WindowState.Maximized;
             TitleBarVisibility = Visibility.Collapsed;
@@ -118,22 +117,22 @@ public partial class MainViewModel(IVideoPlayerFactory factory) : BaseViewModel
                 TimeText = FormatTime(cur, dur);
             });
 
-        Core?.StreamsAnalysed -= OnStreamsAnalysed;
-        Core?.StreamsAnalysed += OnStreamsAnalysed;
+        Core.StreamsAnalysed -= OnStreamsAnalysed;
+        Core.StreamsAnalysed += OnStreamsAnalysed;
 
-        Core?.ErrorOccurred += msg =>
+        Core.ErrorOccurred += msg =>
             Application.Current?.Dispatcher.Invoke(() =>
                 MessageBox.Show(msg, "Playback error",
                     MessageBoxButton.OK, MessageBoxImage.Error));
 
-        Core?.EndOfStream += () =>
+        Core.EndOfStream += () =>
             Application.Current?.Dispatcher.Invoke(() =>
             {
                 SetPosition(0);
                 TimeText = FormatTime(0, Duration);
             });
 
-        Core?.StateChanged += state =>
+        Core.StateChanged += state =>
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 IsPlaying = state == State.Playing;

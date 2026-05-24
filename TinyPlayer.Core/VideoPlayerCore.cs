@@ -31,6 +31,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
     private Element? _playbin;
     private uint _refreshUiHandle;
     private readonly ILogger<VideoPlayerCore> _logger;
+    private const string Flags = "flags";
 
     public VideoPlayerCore(string uri, nint hwnd, ILogger<VideoPlayerCore> logger)
     {
@@ -136,7 +137,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
         _playbin.Connect("audio-tags-changed", TagsCb);
         _playbin.Connect("text-tags-changed", TagsCb);
 
-        _playbin.SetProperty("flags", new Value((uint)AvFlagsType.EnableAllFlags));
+        _playbin.SetProperty(Flags, new Value((uint)AvFlagTypes.EnableAllFlags));
 
         // Waiting for the actual Paused even only then is the duration known
         _playbin.SetState(State.Paused);
@@ -186,15 +187,15 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
             return;
         }
 
-        var flags = (uint)_playbin["flags"];
+        var flags = (uint)_playbin[Flags];
 
         if (enabled)
         {
-            _playbin["flags"] = flags | (uint)AvFlagsType.SubText;
+            _playbin[Flags] = flags | (uint)AvFlagTypes.SubText;
         }
         else
         {
-            _playbin["flags"] = flags & ~(uint)AvFlagsType.SubText;
+            _playbin[Flags] = flags & ~(uint)AvFlagTypes.SubText;
         }
 
         if (!enabled)
@@ -210,10 +211,10 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
             return;
         }
 
-        var flags = (uint)_playbin["flags"];
-        _playbin["flags"] = enabled
-            ? flags | (uint)AvFlagsType.Audio
-            : flags & ~(uint)AvFlagsType.Audio;
+        var flags = (uint)_playbin[Flags];
+        _playbin[Flags] = enabled
+            ? flags | (uint)AvFlagTypes.Audio
+            : flags & ~(uint)AvFlagTypes.Audio;
     }
 
     public void SetVolume(double value)
@@ -372,7 +373,7 @@ public sealed class VideoPlayerCore : IVideoPlayerCore, IDisposable
             return;
         }
 
-        var overlay = ((Bin)_playbin)?.GetByInterface(VideoOverlayAdapter.GType);
+        var overlay = ((Bin)_playbin).GetByInterface(VideoOverlayAdapter.GType);
         if (overlay == null)
         {
             return;
