@@ -5,7 +5,6 @@ namespace TinyPlayer.Core.Abstractions;
 
 public interface IVideoPlayerCore
 {
-    void Dispose();
     event Action<long, long>? PositionChanged;
     event EventHandler<StreamsAnalysedEventArgs>? StreamsAnalysed;
     event Action<string>? ErrorOccurred;

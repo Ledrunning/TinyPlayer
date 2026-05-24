@@ -38,11 +38,11 @@ public class CoreModelTests
     public void AvFlagsType_EnableAllFlags_ContainsVideoAudioAndSubtitle()
     {
         // Arrange & Act
-        var flags = AvFlagsType.EnableAllFlags;
+        var flags = AvFlagTypes.EnableAllFlags;
 
         // Assert
-        Assert.True(flags.HasFlag(AvFlagsType.Video));
-        Assert.True(flags.HasFlag(AvFlagsType.Audio));
-        Assert.True(flags.HasFlag(AvFlagsType.SubText));
+        Assert.True(flags.HasFlag(AvFlagTypes.Video));
+        Assert.True(flags.HasFlag(AvFlagTypes.Audio));
+        Assert.True(flags.HasFlag(AvFlagTypes.SubText));
     }
 }

@@ -120,9 +120,13 @@
                     Height="35"
                     Margin="0,0,6,0"
                     Appearance="Primary"
-                    Command="{Binding StopCommand}"
-                    Content="■"
-                    FontSize="24" />
+                    Command="{Binding StopCommand}">
+                    <ui:Button.Style>
+                        <Style BasedOn="{StaticResource {x:Type ui:Button}}" TargetType="ui:Button">
+                            <Setter Property="Icon" Value="{ui:SymbolIcon Symbol=Stop24}" />
+                        </Style>
+                    </ui:Button.Style>
+                </ui:Button>
 
                 <!--  Mute  -->
                 <ui:Button

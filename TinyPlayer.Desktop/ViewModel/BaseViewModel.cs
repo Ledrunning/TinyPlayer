@@ -14,10 +14,26 @@ public abstract class BaseViewModel : ObservableObject, IDisposable
 
     public readonly List<StreamItem> AllSubtitleTracks = [];
 
+    private bool _disposed;
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            Core?.Dispose();
+            Core = null;
+        }
+
+        _disposed = true;
+    }
+
     public void Dispose()
     {
-        Core?.Dispose();
-        Core = null;
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     protected virtual void OpenFile(Action<string> loadUri)
@@ -28,7 +44,7 @@ public abstract class BaseViewModel : ObservableObject, IDisposable
             Filter = "Video|*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.flv;*.webm|All files|*.*"
         };
 
-        if (dlg.ShowDialog() != true)
+        if (!dlg.ShowDialog().HasValue)
         {
             return;
         }

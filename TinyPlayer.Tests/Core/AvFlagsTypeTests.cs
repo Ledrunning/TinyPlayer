@@ -8,35 +8,35 @@ public class AvFlagsTypeTests
     public void EnableAllFlags_ContainsAllCoreFlags()
     {
         // Arrage & Act
-        var all = AvFlagsType.EnableAllFlags;
+        var all = AvFlagTypes.EnableAllFlags;
 
         // Assert
-        Assert.True(all.HasFlag(AvFlagsType.Video));
-        Assert.True(all.HasFlag(AvFlagsType.Audio));
-        Assert.True(all.HasFlag(AvFlagsType.SubText));
+        Assert.True(all.HasFlag(AvFlagTypes.Video));
+        Assert.True(all.HasFlag(AvFlagTypes.Audio));
+        Assert.True(all.HasFlag(AvFlagTypes.SubText));
     }
 
     [Fact]
     public void DisableSubtitles_DoesNotContainSubtitleFlag()
     {
         // Arrange & Act
-        var value = AvFlagsType.DisableSubtitles;
+        var value = AvFlagTypes.DisableSubtitles;
 
         // Assert
-        Assert.True(value.HasFlag(AvFlagsType.Video));
-        Assert.True(value.HasFlag(AvFlagsType.Audio));
-        Assert.False(value.HasFlag(AvFlagsType.SubText));
+        Assert.True(value.HasFlag(AvFlagTypes.Video));
+        Assert.True(value.HasFlag(AvFlagTypes.Audio));
+        Assert.False(value.HasFlag(AvFlagTypes.SubText));
     }
 
     [Fact]
     public void DisableAudio_DoesNotContainAudioFlag()
     {
         // Arrange & Act
-        var value = AvFlagsType.DisableAudio;
+        var value = AvFlagTypes.DisableAudio;
 
         // Assert
-        Assert.True(value.HasFlag(AvFlagsType.Video));
-        Assert.True(value.HasFlag(AvFlagsType.SubText));
-        Assert.False(value.HasFlag(AvFlagsType.Audio));
+        Assert.True(value.HasFlag(AvFlagTypes.Video));
+        Assert.True(value.HasFlag(AvFlagTypes.SubText));
+        Assert.False(value.HasFlag(AvFlagTypes.Audio));
     }
 }
