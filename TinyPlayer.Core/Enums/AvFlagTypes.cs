@@ -1,7 +1,7 @@
 ﻿namespace TinyPlayer.Core.Enums;
 
 [Flags]
-public enum AvFlagsType : uint
+public enum AvFlagTypes : uint
 {
     Video = 1 << 0,
     Audio = 1 << 1,

@@ -31,7 +31,7 @@ namespace TinyPlayer
         // https://docs.microsoft.com/dotnet/core/extensions/logging
         private static readonly IHost _host = Host
             .CreateDefaultBuilder()
-            .UseSerilog((context, config) =>        // ← вот это
+            .UseSerilog((context, config) =>
             {
                 config
                     .MinimumLevel.Debug()
@@ -101,7 +101,7 @@ namespace TinyPlayer
             }
             finally
             {
-                Log.CloseAndFlush();
+                await Log.CloseAndFlushAsync();
                 _host.Dispose();
             }
         }
